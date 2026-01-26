@@ -1,0 +1,132 @@
+# Build directories
+build/
+out/
+bin/
+lib/
+x64/
+x86/
+Release/
+Debug/
+RelWithDebInfo/
+MinSizeRel/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+CMakeSettings.json
+.cmake/
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+
+# Visual Studio Code
+.vscode/
+
+# Rider
+.idea/
+
+# vcpkg
+vcpkg_installed/
+.vcpkg/
+
+# Build outputs
+*.exe
+*.dll
+*.so
+*.dylib
+*.lib
+*.a
+*.pdb
+*.ilk
+*.exp
+*.obj
+*.o
+
+# Intermediate files
+*.ipch
+*.opensdf
+*.opendb
+*.sdf
+*.VC.db
+*.VC.VC.opendb
+
+# Output files
+output/
+results/
+*.csv
+*.log
+*.jpg
+*.png
+*.mp4
+*.avi
+*.mkv
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# OS specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Model files (large files)
+*.bin
+*.xml
+models/
+pretrained_models/
+
+# Third-party installed packages
+thirdparty/installed/
+thirdparty/downloads/
+thirdparty/packages/
+
+# Python (if any Python scripts)
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Test data
+test_data/
+test_videos/
+sample_videos/
+
+# Documentation build
+docs/_build/
+docs/html/
+docs/latex/
+
+# Config files with sensitive info
+config/local_config.json
+config/*_local.json
+config/.env
+
+# Profiling and debug outputs
+*.prof
+*.trace
+gmon.out
+callgrind.out.*

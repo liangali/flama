@@ -1,0 +1,29 @@
+{
+  "name": "flama",
+  "version": "1.0.0",
+  "description": "Hardware-accelerated video processing pipeline with OpenVINO integration",
+  "homepage": "https://github.com/yourusername/flama",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "ffmpeg",
+      "version>=": "6.0.0",
+      "features": [
+        "avcodec",
+        "avformat",
+        "avutil",
+        "swscale"
+      ]
+    },
+    {
+      "name": "nlohmann-json",
+      "version>=": "3.11.0"
+    },
+    {
+      "name": "opencl",
+      "version>=": "3.0.0"
+    }
+  ],
+  "builtin-baseline": "latest",
+  "overrides": []
+}
