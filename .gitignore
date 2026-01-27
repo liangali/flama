@@ -45,6 +45,7 @@ vcpkg_installed/
 # Build outputs
 *.exe
 *.dll
+!thirdparty/_vplinstall/**/*.dll
 *.so
 *.dylib
 *.lib
