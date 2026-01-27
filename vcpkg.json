@@ -7,23 +7,15 @@
   "dependencies": [
     {
       "name": "ffmpeg",
-      "version>=": "6.0.0",
       "features": [
         "avcodec",
         "avformat",
-        "avutil",
         "swscale"
       ]
     },
-    {
-      "name": "nlohmann-json",
-      "version>=": "3.11.0"
-    },
-    {
-      "name": "opencl",
-      "version>=": "3.0.0"
-    }
+    "nlohmann-json",
+    "opencl"
   ],
-  "builtin-baseline": "latest",
+  "builtin-baseline": "6d332a018c433fad20822ff4b536e4ccdc3413bd",
   "overrides": []
 }
