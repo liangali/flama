@@ -3,8 +3,8 @@
 #include <string>
 #include <algorithm>
 #include <numeric>
-#include <windows.h> // 需要包含 windows.h
-// FFmpeg 库的头文件
+#include <windows.h>
+// FFmpeg library headers
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
@@ -14,7 +14,7 @@ extern "C" {
 #include <libavutil/pixfmt.h>
 }
 
-// 宏定义：检查 FFmpeg 函数的返回值
+// Macro: Check FFmpeg function return values
 #define FF_CHECK(call, msg) \
     if ((call) < 0) { \
         char errbuf[AV_ERROR_MAX_STRING_SIZE]; \
@@ -23,56 +23,56 @@ extern "C" {
         return ret; \
     }
 
-// -------------------------------------------------------------------
-// 硬件解码辅助函数 (D3D11VA)
-// -------------------------------------------------------------------
+// -----------------------------------------------------------------
+// Hardware decoding helper functions (D3D11VA)
+// -----------------------------------------------------------------
 
-// 全局硬件上下文引用
+// Global hardware context reference
 AVBufferRef* hw_device_ctx = nullptr;
 
 /**
- * @brief 回调函数，用于选择 AV_PIX_FMT_D3D11 像素格式。
+ * @brief Callback function to select AV_PIX_FMT_D3D11 pixel format
  */
 static enum AVPixelFormat get_hw_format(AVCodecContext* ctx, const enum AVPixelFormat* pix_fmts) {
     const enum AVPixelFormat* p;
     for (p = pix_fmts; *p != AV_PIX_FMT_NONE; p++) {
         if (*p == AV_PIX_FMT_D3D11) {
-            std::cout << "✅ 选定 AV_PIX_FMT_D3D11 作为硬件像素格式。\n";
+            std::cout << "Selected AV_PIX_FMT_D3D11 as hardware pixel format.\n";
             return *p;
         }
     }
-    std::cerr << "❌ 错误：解码器不支持 AV_PIX_FMT_D3D11 像素格式。\n";
+    std::cerr << "ERROR: Decoder does not support AV_PIX_FMT_D3D11 pixel format.\n";
     return AV_PIX_FMT_NONE;
 }
 
 /**
- * @brief 初始化 D3D11VA 硬件设备上下文。
+ * @brief Initialize D3D11VA hardware device context
  */
 static int init_d3d11va_context() {
     enum AVHWDeviceType type = av_hwdevice_find_type_by_name("d3d11va");
     if (type == AV_HWDEVICE_TYPE_NONE) {
-        std::cerr << "❌ D3D11VA 硬件设备类型不可用。请检查 FFmpeg 编译和系统环境。\n";
+        std::cerr << "ERROR: D3D11VA hardware device type is not available. Check FFmpeg compilation and system environment.\n";
         return -1;
     }
 
     int ret = av_hwdevice_ctx_create(&hw_device_ctx, type, nullptr, nullptr, 0);
     if (ret < 0) {
-        std::cerr << "❌ 创建 D3D11VA 硬件上下文失败: " << ret << "\n";
+        std::cerr << "ERROR: Failed to create D3D11VA hardware context: " << ret << "\n";
         return ret;
     }
-    std::cout << "✅ 成功创建 D3D11VA 硬件上下文。\n";
+    std::cout << "Successfully created D3D11VA hardware context.\n";
     return 0;
 }
 
 
-// -------------------------------------------------------------------
-// 核心函数：FFmpeg 初始化、解码和性能分析
-// -------------------------------------------------------------------
+// -----------------------------------------------------------------
+// Core functions: FFmpeg initialization, decoding, and performance analysis
+// -----------------------------------------------------------------
 
 /**
- * @brief 核心解码和性能分析函数。
- * @param filename 视频文件路径。
- * @param use_hardware 是否使用硬件解码。
+ * @brief Core decoding and performance profiling function
+ * @param filename Path to video file
+ * @param use_hardware Whether to use hardware decoding
  */
 int profile_ffmpeg_decoding(const std::string& filename, bool use_hardware) {
     AVFormatContext* fmt_ctx = nullptr;
@@ -89,14 +89,15 @@ int profile_ffmpeg_decoding(const std::string& filename, bool use_hardware) {
     long long decode_end_us = 0;
     long long total_end_us = 0;
     int total_frames = 0;
-    // 1. 如果是硬件模式，初始化硬件上下文
+
+    // Step 1: Initialize hardware context if hardware decoding is requested
     if (use_hardware) {
         if (init_d3d11va_context() < 0) {
-            return -1; // 硬件初始化失败
+            return -1; // Hardware initialization failed
         }
     }
 
-    // 2. 打开输入文件
+    // Step 2: Open input file
     ret = avformat_open_input(&fmt_ctx, filename.c_str(), nullptr, nullptr);
     FF_CHECK(ret, "avformat_open_input");
 
@@ -105,12 +106,12 @@ int profile_ffmpeg_decoding(const std::string& filename, bool use_hardware) {
 
     ret = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, &decoder, 0);
     if (ret < 0) {
-        std::cerr << "错误：未找到视频流\n";
+        std::cerr << "ERROR: No video stream found\n";
         goto end;
     }
     video_stream_idx = ret;
 
-    // 3. 初始化解码器上下文
+    // Step 3: Initialize decoder context
     dec_ctx = avcodec_alloc_context3(decoder);
     if (!dec_ctx) {
         ret = AVERROR(ENOMEM);
@@ -118,27 +119,27 @@ int profile_ffmpeg_decoding(const std::string& filename, bool use_hardware) {
     }
     avcodec_parameters_to_context(dec_ctx, fmt_ctx->streams[video_stream_idx]->codecpar);
 
-    // 4. 配置硬件加速 (仅限硬件模式)
+    // Step 4: Configure hardware acceleration (hardware mode only)
     if (use_hardware) {
         if (!hw_device_ctx) {
-            // 这不应该发生，但在错误处理中是安全的
-            std::cerr << "致命错误: 硬件上下文未初始化。\n";
+            // This should not happen, but safe in error handling
+            std::cerr << "FATAL ERROR: Hardware context not initialized.\n";
             ret = -1;
             goto end;
         }
         dec_ctx->hw_device_ctx = av_buffer_ref(hw_device_ctx);
         dec_ctx->get_format = get_hw_format;
-        std::cout << "🌐 使用 D3D11VA 硬件加速解码。\n";
+        std::cout << "Using D3D11VA hardware accelerated decoding.\n";
     }
     else {
-        std::cout << "🌐 使用 CPU 软件解码。\n";
+        std::cout << "Using CPU software decoding.\n";
     }
 
-    // 5. 打开解码器
+    // Step 5: Open decoder
     ret = avcodec_open2(dec_ctx, decoder, nullptr);
     FF_CHECK(ret, "avcodec_open2");
 
-    // 6. 分配 Packet 和 Frame
+    // Step 6: Allocate packet and frame
     pkt = av_packet_alloc();
     frame = av_frame_alloc();
     if (!pkt || !frame) {
@@ -146,17 +147,16 @@ int profile_ffmpeg_decoding(const std::string& filename, bool use_hardware) {
         goto end;
     }
 
-    // 7. 解码和计时循环 (与前一脚本相同)
+    // Step 7: Decoding and timing loop
     while (av_read_frame(fmt_ctx, pkt) >= 0) {
-        // ... (此处省略与计时相关的解码循环，与前一脚本完全相同) ...
         printf("[verbose] av_read_frame\n");
         if (pkt->stream_index == video_stream_idx) {
-			printf("[verbose] pkt->stream_index == video_stream_idx\n");
+            printf("[verbose] pkt->stream_index == video_stream_idx\n");
             decode_start_us = av_gettime();
 
             ret = avcodec_send_packet(dec_ctx, pkt);
             if (ret < 0 && ret != AVERROR(EAGAIN) && ret != AVERROR_EOF) {
-                // 忽略 AVERROR(EAGAIN) 和 AVERROR_EOF
+                // Ignore AVERROR(EAGAIN) and AVERROR_EOF
                 FF_CHECK(ret, "avcodec_send_packet");
             }
 

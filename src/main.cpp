@@ -14,7 +14,7 @@
 #include <mutex>
 #include <condition_variable>
 
-// 先包含 C 风格的 FFmpeg 头文件
+// Include C-style FFmpeg headers first
 extern "C"
 {
 #include <libavcodec/avcodec.h>
@@ -74,9 +74,9 @@ static int g_cb_pending_batches = 0;
 static int g_cb_enqueued_batches = 0;
 static bool use_cb = false;
 static int cb_batch_size = 0;
-FSConfig g_fsConfig; // 默认初始化
-BatchConfig g_batchConfig; // 新批处理配置全局变量
-CommonConfig g_commonConfig; // 全局通用配置默认初始化
+FSConfig g_fsConfig; // Default initialization
+BatchConfig g_batchConfig; // New batch config global variable
+CommonConfig g_commonConfig; // Global common config, default initialized
 VLMConfig g_vlmConfig;
 static int report_idx = 0;
 static std::atomic<bool> finishGenerationThread{ false };
@@ -378,7 +378,7 @@ static void RunBatchSW()
         }
         else
         {
-            std::cerr<<"too many frames for inference. frame number is " << useN << std::endl;
+            std::cerr << "Too many frames for inference. Frame count: " << useN << std::endl;
         }
         DBG_LOG(std::string("[VLM] Inference (batch ") + std::to_string(bs.batchIndex) + ") Output: " + out);
     }
@@ -737,7 +737,7 @@ static void RunBatchHW(/*bool use_cb*/)
                 }
                 else
                 {
-                    std::cerr<<"too many frames for inference. frame number is " << useN << std::endl;
+                    std::cerr << "Too many frames for inference. Frame count: " << useN << std::endl;
                 }
                 DBG_LOG(std::string("[VLM] Queued CB params (batch ") + std::to_string(bs.batchIndex) + ")");
                 if (!cb_threads_started)
@@ -814,7 +814,7 @@ static void RunBatchHW(/*bool use_cb*/)
             }
             else
             {
-                std::cerr<<"too many frames for inference. frame number is " << useN << std::endl;
+                std::cerr << "Too many frames for inference. Frame count: " << useN << std::endl;
             }
         }
         catch (const std::exception &ex)
@@ -1160,7 +1160,7 @@ void decode_frames_sw(AVFormatContext *format_context, AVCodecContext *codec_con
     AVPixelFormat lastSrcFmt = AV_PIX_FMT_NONE;
     int lastW = 0, lastH = 0;
 
-    // 创建抽帧选择器（使用全局配置）
+    // Create frame selector (using global config)
     FrameSelector selector(g_fsConfig);
     AVRational time_base = format_context->streams[stream_index]->time_base;
 
@@ -1911,7 +1911,7 @@ void cleanup(AVFormatContext *format_context, AVCodecContext *codec_context)
     avformat_network_deinit();
 }
 // -----------------------------------------------------------------
-// 核心函数：将 Windows UTF-16 路径转换为 FFmpeg UTF-8 路径
+// Core function: Convert Windows UTF-16 path to FFmpeg UTF-8 path
 // -----------------------------------------------------------------
 std::string WideToUtf81(const std::wstring &wstr)
 {
@@ -1920,39 +1920,39 @@ std::string WideToUtf81(const std::wstring &wstr)
         return "";
     }
 
-    // 1. 获取所需缓冲区大小
+    // Step 1: Get required buffer size
     int utf8_size = WideCharToMultiByte(
-        CP_UTF8,            // 目标编码：UTF-8
-        0,                  // 标志位
-        wstr.c_str(),       // 宽字符串输入
-        (int)wstr.length(), // 输入长度
-        NULL,               // 输出缓冲区（NULL用于计算大小）
-        0,                  // 输出缓冲区大小
-        NULL, NULL          // 默认字符和标志（不用）
+        CP_UTF8,            // Target encoding: UTF-8
+        0,                  // Flags
+        wstr.c_str(),       // Wide character string input
+        (int)wstr.length(), // Input length
+        NULL,               // Output buffer (NULL to calculate size)
+        0,                  // Output buffer size
+        NULL, NULL          // Default character and flags (unused)
     );
 
     if (utf8_size == 0)
     {
-        // 错误处理，例如 GetLastError()
+        // Error handling, e.g., GetLastError()
         return "";
     }
 
-    // 2. 分配缓冲区并执行转换
-    std::string utf8_str(utf8_size, 0); // 分配空间并初始化
+    // Step 2: Allocate buffer and perform conversion
+    std::string utf8_str(utf8_size, 0); // Allocate and initialize
     WideCharToMultiByte(
         CP_UTF8,
         0,
         wstr.c_str(),
         (int)wstr.length(),
-        &utf8_str[0], // 输出缓冲区
-        utf8_size,    // 输出缓冲区大小
+        &utf8_str[0], // Output buffer
+        utf8_size,    // Output buffer size
         NULL, NULL);
 
     return utf8_str;
 }
 
 // -----------------------------------------------------------------
-// FFmpeg 调用示例
+// FFmpeg usage example
 // -----------------------------------------------------------------
 int main4()
 {
@@ -2174,7 +2174,7 @@ int main(int argc, char *argv[])
         std::cerr << "[PROF] Failed to create output directory '" << outDir << "': " << e.what() << std::endl;
     }
 
-    const char *hw_device_type = "d3d11va"; // 默认硬件解码类型
+    const char *hw_device_type = "d3d11va"; // Default hardware decoding type
 
     init_ffmpeg();
 

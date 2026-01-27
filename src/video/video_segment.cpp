@@ -108,13 +108,13 @@ bool VideoSegmentor::Init(VideoSegParams Params)
         ov::Shape inputShape = input.get_shape();
         ov::Layout inputLayout = ov::layout::get_layout(input);
 
-        // 检查输入形状是否符合预期（至少有4个维度）
-        int inputDimHeight =0;
-        int inputDimWidth  =0;
+        // Check if input shape has expected dimensions (at least 4D)
+        int inputDimHeight = 0;
+        int inputDimWidth = 0;
         if (inputShape.size() == 4) {
-            // 提取高度和宽度信息
+            // Extract height and width dimensions
             inputDimHeight = inputShape[2];
-            inputDimWidth  = inputShape[3];
+            inputDimWidth = inputShape[3];
 
             std::cout << "Input height: " << inputDimHeight << std::endl;
             std::cout << "Input width: " << inputDimWidth << std::endl;
@@ -228,7 +228,7 @@ std::vector<std::string> readImagenetLabels(const std::string& labelPath) {
     return labels;
 }
 
-// Softmax 函数
+// Softmax function
 std::vector<float> softmax(const std::vector<float>& scores) {
     std::vector<float> probabilities(scores.size());
     float sum = 0.0;
@@ -242,7 +242,7 @@ std::vector<float> softmax(const std::vector<float>& scores) {
     return probabilities;
 }
 
-// 输出前 k 个预测结果
+// Print top k prediction results
 void printTopKResults(const std::vector<float>& probabilities, const std::vector<std::string>& labels, int k) {
     std::vector<std::pair<float, int>> sortedProbs;
     for (size_t i = 0; i < probabilities.size(); ++i) {
@@ -252,12 +252,12 @@ void printTopKResults(const std::vector<float>& probabilities, const std::vector
         return a.first > b.first;
         });
 
-    std::cout << "前 " << k << " 个预测结果:" << std::endl;
+    std::cout << "Top " << k << " prediction results:" << std::endl;
     for (int i = 0; i < k; ++i) {
         int classIndex = sortedProbs[i].second;
         std::string className = labels[classIndex];
         float classProb = sortedProbs[i].first;
-        std::cout << i + 1 << ". 类别: " << className << ", 概率: " << classProb * 100 << "%\n";
+        std::cout << (i + 1) << ". Class: " << className << ", Probability: " << (classProb * 100) << "%\n";
     }
 }
 
@@ -298,16 +298,13 @@ void PrintInputAndOutputsInfo(const ov::Model& network) {
 }
 bool CheckOpenVINOEnvironment(ov::Core& core) {
     try {
-        // 版本
+        // Version info
         std::cout << "OpenVINO Version: " << ov::get_openvino_version() << std::endl;
-    //const char* pluginPath = 
-    //    std::getenv("OV_PLUGIN_PATH");
-    //std::cout << "OV_PLUGIN_PATH=" << (pluginPath ? pluginPath : "(unset)") << std::endl;
 
-    const char* pathEnv = std::getenv("PATH");
-    if (pathEnv)
-        std::cout << "PATH contains length=" << strlen(pathEnv) << std::endl;
-        // 可用设备
+        const char* pathEnv = std::getenv("PATH");
+        if (pathEnv)
+            std::cout << "PATH length: " << strlen(pathEnv) << std::endl;
+        // Available devices
         auto devices = core.get_available_devices();
         std::cout << "Available devices (" << devices.size() << "): ";
         for (auto& d : devices) std::cout << d << " ";
@@ -316,7 +313,7 @@ bool CheckOpenVINOEnvironment(ov::Core& core) {
             std::cerr << "WARNING: No devices detected." << std::endl;
         }
 
-        // GPU 插件检查（存在则输出属性）
+        // GPU device properties check
         if (std::find(devices.begin(), devices.end(), "GPU") != devices.end()) {
             try {
                 auto opt = core.get_property("GPU", ov::device::properties);
@@ -326,21 +323,7 @@ bool CheckOpenVINOEnvironment(ov::Core& core) {
             }
         }
 
-//        // 前端列表（若 frontend API 可用）
-//        try {
-//#if defined(OPENVINO_VERSION_MAJOR) // 假定已定义版本宏
-//            // 新版前端 (若你的版本支持)
-//            ov::frontend::FrontEndManager fem;
-//            auto fets = ov::frontend::FrontEndManager().get_available_front_ends();
-//            std::cout << "Available frontends: ";
-//            for (auto& f : fets) std::cout << f << " ";
-//            std::cout << std::endl;
-//#endif
-//        } catch (...) {
-//            std::cout << "Frontend enumeration not supported in this build." << std::endl;
-//        }
-
-        // 简单功能测试：创建空张量
+        // Sanity check: create empty tensor
         ov::Tensor t{ov::element::f32, {1, 3, 2, 2}};
         if (t.get_size() != 12) {
             std::cerr << "Tensor sanity check failed." << std::endl;
@@ -413,10 +396,9 @@ int InitVideoSegment(VideoSegParams cliParams) {
 
 
         //-- Read a network model
-        const std::string modelPath = /*TSTRING2STRING(cliParams.inmodelName)*/ "D:\\models\\resnet50 - scene\\resnet50_scene.xml";
+        const std::string modelPath = TSTRING2STRING(cliParams.inmodelName);
         std::cout << "Loading network model files: " << modelPath << std::endl;
-        // D:\models\gemma3-4b-it-ov *D:\\models\\resnet-50-ov-int4*/
-        std::shared_ptr<ov::Model> model = core.read_model("D:\\models\\resnet50-scene\\resnet50_scene.xml");
+        std::shared_ptr<ov::Model> model = core.read_model(modelPath);
         PrintInputAndOutputsInfo(*model);
 
         VERIFY_THROW(model->inputs().size() == 1, "ERROR: sample supports topologies with 1 input only");
@@ -438,9 +420,9 @@ int InitVideoSegment(VideoSegParams cliParams) {
         ov::Shape inputShape = input.get_shape();
         ov::Layout inputLayout = ov::layout::get_layout(input);
 
-        // 检查输入形状是否符合预期（至少有4个维度）
+        // Check if input shape has expected dimensions (at least 4D)
         if (inputShape.size() == 4) {
-            // 提取高度和宽度信息
+            // Extract height and width dimensions
             inputDimHeight = inputShape[2];
             inputDimWidth = inputShape[3];
 
@@ -455,21 +437,13 @@ int InitVideoSegment(VideoSegParams cliParams) {
         PrePostProcessor ppp(model);
         InputInfo& inputInfo = ppp.input(inputTensorName);
 
-        // Set the input tensor
-        //if (cliParams.bZeroCopy) {
-            inputInfo.tensor()
-                .set_element_type(ov::element::u8)
-                .set_color_format(ColorFormat::NV12_TWO_PLANES, { "y", "uv" })
-                .set_memory_type(ov::intel_gpu::memory_type::surface);
-        //}
-        //else
-        //{
-        //    inputInfo.tensor()
-        //        .set_element_type(ov::element::u8)
-        //        .set_color_format(ColorFormat::NV12_TWO_PLANES, { "y", "uv" });
-        //}
+        // Set the input tensor for D3D11 zero-copy
+        inputInfo.tensor()
+            .set_element_type(ov::element::u8)
+            .set_color_format(ColorFormat::NV12_TWO_PLANES, { "y", "uv" })
+            .set_memory_type(ov::intel_gpu::memory_type::surface);
 
-        // Convert vpp output to BGR plannar
+        // Convert VPP output to BGR planar
         
 
         inputInfo.preprocess()
@@ -514,87 +488,19 @@ int InitVideoSegment(VideoSegParams cliParams) {
     std::cout << "SceneDetection model is ready for inference " << std::endl;
     return 0;
 }
-//bool LoadAndReportModel(const std::string& xmlPath,
-//                        ov::Core& core,
-//                        std::shared_ptr<ov::Model>& outModel) {
-//    namespace fs = std::filesystem;
-//    try {
-//        // 1. 路径与文件检查
-//        if (!fs::exists(xmlPath)) {
-//            std::cerr << "模型XML不存在: " << xmlPath << std::endl;
-//            return false;
-//        }
-//        fs::path binPath = fs::path(xmlPath).replace_extension(".bin");
-//        if (!fs::exists(binPath)) {
-//            std::cerr << "对应BIN文件缺失: " << binPath.string() << std::endl;
-//            return false;
-//        }
-//
-//        // 2. 调用 OpenVINO 读模型
-//        outModel = core.read_model(xmlPath);
-//
-//        if (!outModel) {
-//            std::cerr << "read_model 返回空指针" << std::endl;
-//            return false;
-//        }
-//
-//        // 3. 打印基本信息
-//        std::cout << "==== 模型加载成功 ====" << std::endl;
-//        std::cout << "模型友好名称: " << outModel->get_friendly_name() << std::endl;
-//        std::cout << "XML: " << xmlPath << "\nBIN: " << binPath.string() << std::endl;
-//
-//        // 输入信息
-//        auto inputs = outModel->inputs();
-//        std::cout << "输入数: " << inputs.size() << std::endl;
-//        for (size_t i = 0; i < inputs.size(); ++i) {
-//            auto in = inputs[i];
-//            std::string name = in.get_names().empty() ? "(unnamed)" : in.get_any_name();
-//            std::cout << "  [Input " << i << "] name=" << name
-//                      << " type=" << in.get_element_type()
-//                      << " shape=" << in.get_shape() << std::endl;
-//            // 尝试获取布局
-//            try {
-//                auto layout = ov::layout::get_layout(in);
-//                std::cout << "    layout=" << layout.to_string() << std::endl;
-//            } catch (...) {
-//                std::cout << "    layout=未定义" << std::endl;
-//            }
-//        }
-//
-//        // 输出信息
-//        auto outputs = outModel->outputs();
-//        std::cout << "输出数: " << outputs.size() << std::endl;
-//        for (size_t i = 0; i < outputs.size(); ++i) {
-//            auto out = outputs[i];
-//            std::string name = out.get_names().empty() ? "(unnamed)" : out.get_any_name();
-//            std::cout << "  [Output " << i << "] name=" << name
-//                      << " type=" << out.get_element_type()
-//                      << " shape=" << out.get_shape() << std::endl;
-//        }
-//
-//        std::cout << "======================" << std::endl;
-//        return true;
-//    } catch (const ov::Exception& ex) {
-//        std::cerr << "OpenVINO 异常: " << ex.what() << std::endl;
-//    } catch (const std::exception& ex) {
-//        std::cerr << "标准异常: " << ex.what() << std::endl;
-//    } catch (...) {
-//        std::cerr << "未知异常" << std::endl;
-//    }
-//    return false;
-//}
-//
+
 
 #include <cmath>
 
 static unsigned int frameIndex = 0;
-std::vector<int> sceneChanges = { 0 };  // 第一帧是场景的起始
+std::vector<int> sceneChanges = { 0 };  // First frame is the start of scene
 std::vector<float> previousFeature;
 unsigned int queueSize = 0;
 
-std::deque<std::vector<float>> featureWindow;  // 滑动窗口，存储前面 4 帧的特征向量
+std::deque<std::vector<float>> featureWindow;  // Sliding window to store feature vectors from previous frames
 const size_t WINDOW_SIZE = 10;
-// 计算余弦相似度
+
+// Calculate cosine similarity between two vectors
 double cosineSimilarity(const std::vector<float>& a, const std::vector<float>& b) {
     double dotProduct = 0.0;
     double normA = 0.0;
@@ -618,15 +524,15 @@ double cosineSimilarity(const std::vector<float>& a, const std::vector<float>& b
 
 
 
-// 根据语义相似性检测场景变化
+// Detect scene changes based on semantic similarity of frame features
 int detectScenesBySemanticSimilarity(const std::vector<float>& feature, double threshold = 0.7) {
     if (featureWindow.size() < WINDOW_SIZE) {
-        // 前 WINDOW_SIZE 帧，先填充窗口
+        // Fill window with first WINDOW_SIZE frames
         featureWindow.push_back(feature);
     }
     else {
         bool isSceneChange = false;
-        // 计算当前帧与窗口内每一帧的相似度
+        // Calculate similarity between current frame and all frames in window
         int diff = 0;
         for (const auto& prevFeature : featureWindow) {
             double similarity = cosineSimilarity(prevFeature, feature);
@@ -651,38 +557,36 @@ int detectScenesBySemanticSimilarity(const std::vector<float>& feature, double t
             featureWindow.push_back(feature);
         }
     }
-    std::cout << "Scene change at frame # " << frameIndex <<std::endl;
+    std::cout << "Scene change detected at frame: " << frameIndex << std::endl;
     for (int frameNum : sceneChanges) {
         std::cout << frameNum << " ";
     }
     std::cout << std::endl;
-    //frameIndex++;
     return 0;
 }
 
-// 根据语义相似性检测场景变化
-int detectScenesBySemanticSimilarity2( std::vector<float>& feature, double threshold = 0.7) {
+// Detect scene changes based on similarity with previous frame
+int detectScenesBySemanticSimilarity2(std::vector<float>& feature, double threshold = 0.7) {
 
     if (frameIndex == 0) {
-       // skip scene detect, assume it is the first scene
+        // Initialize with first frame features
         previousFeature.resize(feature.size());
         for (size_t i = 0; i < feature.size(); ++i) {
             previousFeature[i] = feature[i];
         }
     }
     else {
-       
         double similarity = cosineSimilarity(previousFeature, feature);
-        if (similarity < threshold) {  // 如果相似度低于阈值，认为场景发生变化
+        // Scene change detected if similarity below threshold
+        if (similarity < threshold) {
             sceneChanges.push_back(static_cast<int>(frameIndex));
         }
         for (size_t i = 0; i < feature.size(); ++i) {
             previousFeature[i] = feature[i];
         }
-        
     }
 
-    std::cout << "场景变化的帧号: ";
+    std::cout << "Scene change frame indices: ";
     for (int frameNum : sceneChanges) {
         std::cout << frameNum << " ";
     }
@@ -780,16 +684,3 @@ mfxStatus InferFrame(ov::intel_gpu::ocl::VAContext context,
     std::cout << std::endl;
     return sts;
 }
-
-
-#if 0
-int main()
-{
-    VideoSegParams params;
-    params.bZeroCopy = TRUE;
-    params.pD3D11Device = NULL;
-    params.inmodelName = (char*)("D:\\models\\resnet50.xml");
-    InitVideoSegment(params);
-    return 0;
-}
-#endif

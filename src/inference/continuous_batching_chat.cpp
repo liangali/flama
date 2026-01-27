@@ -30,18 +30,7 @@ ov::genai::ContinuousBatchingPipeline& GetCachedCBPipeline()
     std::call_once(g_once, []()
         {
             // Read options from JSON (falls back to defaults if missing)
-           // const PipelineOptions opts = parseOptions(g_CBConfigPath);
             std::cout << "Loading models, creating pipelines, preparing environment..." << std::endl;
-
-            // g_pipeline = CreateCBPipeline(opts);
-            std::string path = "D:\\models\\Qwen2.5-VL-3B-Instruct-int4-opt";
-            std::string device = "GPU"; // ���� GPU �ɸ�
-            // auto scheduler_config = ov::genai::SchedulerConfig();
-
-            /* scheduler_config.max_num_batched_tokens = 4096;
-             scheduler_config.max_num_seqs = 64;
-             scheduler_config.dynamic_split_fuse = false;
-             std::cout << "schedulerConfig: \n" << scheduler_config.to_string() << std::endl;*/
             std::cout << "path: " << g_vlmConfig.path << std::endl;
             std::cout << "device: " << g_vlmConfig.device << std::endl;
             std::cout << "schedulerConfig: \n" << g_vlmConfig.shedulerConfig.to_string() << std::endl;

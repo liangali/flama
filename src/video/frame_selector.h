@@ -1,6 +1,6 @@
 #pragma once
 // FrameSelector.h
-// 抽帧策略与缓存：位于 Decode 与 Scale 之间
+// Frame selection strategy and cache: located between Decode and Scale
 
 #include <deque>
 #include <string>
@@ -16,15 +16,17 @@ extern "C" {
 }
 
 #include "../utils/util.h"
-// 选中帧缓存条目
+
+// Selected frame cache entry
 struct FSSelected {
-    AVFrame* frame = nullptr;  // 克隆的帧（引用底层数据）
-    double pts_seconds = 0.0;  // 时间戳秒
-    int64_t pts = 0;           // 原始 pts 或 best_effort_timestamp
-    int index_in_stream = 0;   // 全局解码序号
+    AVFrame* frame = nullptr;  // Cloned frame (references underlying data)
+    double pts_seconds = 0.0;  // Timestamp in seconds
+    int64_t pts = 0;           // Original PTS or best_effort_timestamp
+    int index_in_stream = 0;   // Global decode index
 };
 
-// 抽帧器：解码后调用 AcceptDecodedFrame 做决策；被选中后克隆并加入缓存
+// Frame selector: call AcceptDecodedFrame after decoding to make selection decision
+// Selected frames are cloned and added to cache
 class FrameSelector {
 public:
     explicit FrameSelector(const FSConfig& cfg) : cfg_(cfg) { Reset(); }
@@ -32,13 +34,13 @@ public:
 
     void Reset();
 
-    // 解码后调用；返回 true 表示选中，并提供克隆帧 outSelected（供后续 Scale 使用）
+    // Called after decoding; returns true if frame selected, provides cloned frame in outSelected (for scaling)
     bool AcceptDecodedFrame(AVFrame* frame, AVRational time_base, AVFrame*& outSelected);
 
-    // 通知场景切换（外部可调用：例如视频分割或场景检测模块识别到 scene cut）
+    // Notify scene cut (can be called externally, e.g., by scene detection module)
     void NotifySceneCut() { pending_scene_cut_ = true; }
 
-    // 拉取一批缓存（不一定在当前需求中使用）
+    // Fetch batch of cached frames (not necessarily used in current request)
     std::vector<FSSelected> FetchBatch(size_t maxBatch);
 
     const std::deque<FSSelected>& GetCache() const { return cache_; }
@@ -58,7 +60,7 @@ private:
     double window_start_sec_ = -DBL_MAX;
     int window_selected_count_ = 0;
     std::deque<FSSelected> cache_;
-    // SceneCut 状态
+    // Scene cut state
     bool pending_scene_cut_ = false;
     int last_scene_cut_frame_index_ = -INT_MAX;
     double last_scene_cut_pts_sec_ = -DBL_MAX;

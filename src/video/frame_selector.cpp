@@ -26,10 +26,10 @@ double FrameSelector::ExtractPtsSec(AVFrame* f, AVRational tb) {
 }
 
 bool FrameSelector::DecidePick(double pts_sec) {
-    // 帧间隔策略
+    // Frame interval strategy
     bool byFrame = (cfg_.frame_interval <= 1) ? true : (total_decoded_ % cfg_.frame_interval == 0);
 
-    // 时间窗口策略
+    // Time window strategy
     bool byTime = false;
     if (cfg_.window_seconds > 0.0 && cfg_.max_per_window > 0) {
         if (!std::isfinite(window_start_sec_)) {
@@ -46,23 +46,18 @@ bool FrameSelector::DecidePick(double pts_sec) {
         }
     }
 
-    // 关键帧判断：AVFrame 的 key_frame 标志（部分编解码器可能未填充）
-    bool isKeyframe = false; // 在 AcceptDecodedFrame 中重新获取 frame->key_frame
-    // 暂时在这里不获取 frame 指针，仅通过 AcceptDecodedFrame 传入时再判断
-
     bool pick = false;
     switch (cfg_.policy) {
         case FSPolicy::FrameInterval: pick = byFrame; break;
         case FSPolicy::TimeWindowQuota: pick = byTime; break;
         case FSPolicy::Mixed: pick = (byFrame || byTime); break;
-        case FSPolicy::KeyframePriority: // 关键帧优先，其余按帧间隔补充
-            // 在 AcceptDecodedFrame 中若是关键帧将强制选中；此处仅保留非关键帧逻辑
+        case FSPolicy::KeyframePriority: // Keyframe priority, supplemented by frame interval
             pick = byFrame || byTime; break;
-        case FSPolicy::MixedKeyframe: // 关键帧必选 或 满足其它任一
+        case FSPolicy::MixedKeyframe: // Keyframes always, or any other condition
             pick = byFrame || byTime; break;
     }
 
-    // 最小间隔约束
+    // Min interval constraints
     if (pick && cfg_.min_frames_between > 0 &&
         (total_decoded_ - last_selected_frame_index_) < cfg_.min_frames_between) pick = false;
     if (pick && cfg_.min_seconds_between > 0.0 && std::isfinite(last_selected_pts_sec_) &&
@@ -78,20 +73,20 @@ bool FrameSelector::AcceptDecodedFrame(AVFrame* frame, AVRational time_base, AVF
     bool isKeyframe = (frame && ((frame->flags & AV_FRAME_FLAG_KEY) != 0));
     bool sceneCutPick = false;
     if (pending_scene_cut_) {
-        // 场景切换触发后检查防抖约束
+        // Check debounce constraints after scene cut triggered
         if (SceneCutAllowed(pts_sec)) {
             sceneCutPick = true;
             last_scene_cut_frame_index_ = total_decoded_;
             last_scene_cut_pts_sec_ = pts_sec;
         }
-        pending_scene_cut_ = false; // 消耗一次触发
+        pending_scene_cut_ = false; // Consume one trigger
     }
 
     bool pick = basePick;
     if (cfg_.policy == FSPolicy::KeyframePriority || cfg_.policy == FSPolicy::MixedKeyframe) {
-        if (isKeyframe && cfg_.force_keyframe) pick = true; // 关键帧强制选中
+        if (isKeyframe && cfg_.force_keyframe) pick = true; // Force keyframe selection
     }
-    if (cfg_.enable_scene_cut && sceneCutPick) pick = true; // 场景切换强制选中
+    if (cfg_.enable_scene_cut && sceneCutPick) pick = true; // Force scene cut selection
     if (!pick) return false;
 
     AVFrame* clone = av_frame_clone(frame);

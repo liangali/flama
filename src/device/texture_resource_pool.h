@@ -2,28 +2,28 @@
 #include <vector>
 #include <d3d11.h>
 
-// 资源结构体
+// Texture resource structure
 struct TextureResource {
     ID3D11Texture2D* pTexture;
     bool used;
     TextureResource() : pTexture(nullptr), used(false) {}
 };
 
-// 资源池类
+// Texture resource pool class
 class TextureResourcePool {
 private:
     std::vector<TextureResource> resources;
 
 public:
-    // 初始化资源池
+    // Initialize resource pool
     void Initialize(size_t poolSize);
 
-    // 获取空闲资源
+    // Get available resource
     ID3D11Texture2D* GetAvailableResource();
 
-    // 返回资源
+    // Return resource
     void ReturnResource(ID3D11Texture2D* texture);
 
-    // 设置资源纹理
+    // Set texture resource
     void SetTexture(size_t index, ID3D11Texture2D* texture);
 };

@@ -10,30 +10,30 @@ namespace ov { namespace genai { struct SchedulerConfig; } }
 struct FrameSelectorCfg {
     // Policy selection: use either name or integer id
     std::optional<std::string> policy; // "frame"|"time"|"mixed"|"key"|"mixed-key"
-    // 每 N 帧取 1
+    // Sample every N frames
     std::optional<int> frame_interval;
-    // 时间窗口长度 (秒)
+    // Time window length (seconds)
     std::optional<double> window_seconds;
-    // 每窗口最多选帧数
+    // Max frames per window
     std::optional<int> max_per_window;
-    // 两次选帧的最小帧间隔
+    // Min frame interval between selections
     std::optional<int> min_frames_between;
-    // 两次选帧的最小时间间隔
+    // Min time interval between selections (seconds)
     std::optional<double> min_seconds_between;
-    // 最大缓存数量
+    // Max cache size
     std::optional<int> max_cached;
-    // FetchBatch 后是否移除缓存
+    // Remove cache after FetchBatch
     std::optional<bool> remove_after_process;
 
-    // 关键帧是否强制选中
+    // Force keyframe selection
     std::optional<bool> force_keyframe;
-    // 是否启用场景切换选帧
+    // Enable scene cut frame selection
     std::optional<bool> enable_scene_cut;
-    // 防抖：场景切换最小间隔帧
+    // Debounce: min frame interval for scene cuts
     std::optional<int> min_frames_between_scene_cut;
-    // 防抖：场景切换最小间隔秒
+    // Debounce: min time interval for scene cuts (seconds)
     std::optional<double> min_seconds_between_scene_cut;
-    // 是否持久缓存选中帧（默认关闭，避免与外部释放冲突）
+    // Persistent cache for selected frames (default off to avoid conflicts with external deallocation)
     std::optional<bool> enable_cache;
 };
 

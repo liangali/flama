@@ -865,40 +865,37 @@ bool CheckKB_Quit(void) {
 #endif
 }
 
-// 编码转换工具
-// // -----------------------------------------------------------------
-// 核心函数：将 Windows UTF-16 路径转换为 FFmpeg UTF-8 路径
-// -----------------------------------------------------------------
+// Convert Windows UTF-16 wide string to FFmpeg UTF-8 string
 std::string WideToUtf8(const std::wstring& wstr) {
     if (wstr.empty()) {
         return "";
     }
 
-    // 1. 获取所需缓冲区大小
+    // Calculate required UTF-8 buffer size
     int utf8_size = WideCharToMultiByte(
-        CP_UTF8,            // 目标编码：UTF-8
-        0,                  // 标志位
-        wstr.c_str(),       // 宽字符串输入
-        (int)wstr.length(), // 输入长度
-        NULL,               // 输出缓冲区（NULL用于计算大小）
-        0,                  // 输出缓冲区大小
-        NULL, NULL          // 默认字符和标志（不用）
+        CP_UTF8,            // Target code page: UTF-8
+        0,                  // Flags
+        wstr.c_str(),       // Wide character string
+        (int)wstr.length(), // Wide string length
+        NULL,               // Pass NULL to get size only
+        0,                  // Output size
+        NULL, NULL          // Default character and flag (unused)
     );
 
     if (utf8_size == 0) {
-        // 错误处理，例如 GetLastError()
+        // Conversion failed, check GetLastError() for details
         return "";
     }
 
-    // 2. 分配缓冲区并执行转换
-    std::string utf8_str(utf8_size, 0); // 分配空间并初始化
+    // Allocate buffer and perform actual conversion
+    std::string utf8_str(utf8_size, 0); // Allocate and initialize buffer
     WideCharToMultiByte(
         CP_UTF8,
         0,
         wstr.c_str(),
         (int)wstr.length(),
-        &utf8_str[0],       // 输出缓冲区
-        utf8_size,          // 输出缓冲区大小
+        &utf8_str[0],       // Output buffer
+        utf8_size,          // Output buffer size
         NULL, NULL
     );
 
