@@ -32,7 +32,10 @@ The following dependencies need to be installed manually:
 
 - **Intel OpenVINO Runtime 2025.4+**: AI inference engine ([Download](https://www.intel.com/content/www/us/en/developer/tools/openvino-toolkit/overview.html))
 - **OpenVINO GenAI 2025.4+**: Visual Language Model support ([Download](https://github.com/openvinotoolkit/openvino.genai))
-- **Intel oneVPL**: Video post-processing ([Download](https://github.com/oneapi-src/oneVPL))
+
+The following dependencies are bundled in the repository:
+
+- **Intel oneVPL**: Video post-processing (located in `thirdparty/_vplinstall/`)
 
 ## Environment Setup
 
@@ -150,19 +153,23 @@ From **OpenVINO GenAI** (`runtime/bin/intel64/Release/`):
 From **TBB** (`runtime/3rdparty/tbb/bin/`):
 - `tbb12.dll` - Threading Building Blocks
 
-### 3. Install oneVPL
+### 3. oneVPL (Bundled)
 
-Download and install Intel oneVPL:
+Intel oneVPL is **bundled with the repository** - no installation required.
 
-1. Visit [oneVPL GitHub Releases](https://github.com/oneapi-src/oneVPL/releases)
-2. Download the Windows installer or build from source
-3. Install to default location (e.g., `C:\Program Files\Intel\oneVPL`)
-4. Set environment variables:
+Location: `thirdparty/_vplinstall/`
 
-```powershell
-setx VPL_DIR "C:\Program Files\Intel\oneVPL"
-setx PATH "%PATH%;C:\Program Files\Intel\oneVPL\bin"
 ```
+thirdparty/_vplinstall/
+├── bin/                    # libvpl.dll and runtime DLLs
+├── include/vpl/            # Headers (mfx*.h)
+├── lib/
+│   ├── vpl.lib             # Import library
+│   └── cmake/vpl/          # VPLConfig.cmake
+└── share/vpl/              # Examples and licensing
+```
+
+CMake will automatically find VPL via the `-DVPL_DIR` flag (see Build section).
 
 ### 4. Install Dependencies via vcpkg
 
@@ -214,8 +221,10 @@ mkdir build
 cd build
 
 # Configure CMake - it will find OpenVINO automatically via environment variables
+# VPL is bundled in thirdparty, specify its path explicitly
 cmake .. -G "Visual Studio 17 2022" -A x64 `
-  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
+  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
+  -DVPL_DIR="$PWD\..\thirdparty\_vplinstall\lib\cmake\vpl"
 
 # Build the project
 cmake --build . --config Release
@@ -232,12 +241,13 @@ cd D:\code\flama_code\flama
 mkdir build
 cd build
 
-# Configure with explicit OpenVINO paths
+# Configure with explicit paths for all dependencies
 cmake .. -G "Visual Studio 17 2022" -A x64 `
   -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
   -DOpenVINO_DIR="D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\cmake" `
   -DOpenVINOGenAI_DIR="D:\library\openvino.genai\openvino_genai_windows_2025.4.2.0_x86_64\runtime\cmake" `
-  -DTBB_DIR="D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\3rdparty\tbb\lib\cmake\TBB"
+  -DTBB_DIR="D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\3rdparty\tbb\lib\cmake\TBB" `
+  -DVPL_DIR="D:\code\flama_code\flama\thirdparty\_vplinstall\lib\cmake\vpl"
 
 cmake --build . --config Release
 ```
@@ -413,7 +423,8 @@ If CMake cannot find OpenVINO packages:
      -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
      -DOpenVINO_DIR="D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\cmake" `
      -DOpenVINOGenAI_DIR="D:\library\openvino.genai\openvino_genai_windows_2025.4.2.0_x86_64\runtime\cmake" `
-     -DTBB_DIR="D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\3rdparty\tbb\lib\cmake\TBB"
+     -DTBB_DIR="D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\3rdparty\tbb\lib\cmake\TBB" `
+     -DVPL_DIR="D:\code\flama_code\flama\thirdparty\_vplinstall\lib\cmake\vpl"
    ```
 
 3. **Verify the cmake directory exists** and contains `OpenVINOConfig.cmake`:
@@ -449,6 +460,9 @@ If the executable fails to run due to missing DLLs:
 
    # TBB DLLs
    D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\3rdparty\tbb\bin
+
+   # VPL DLLs (bundled)
+   D:\code\flama_code\flama\thirdparty\_vplinstall\bin
    ```
 
 3. **Or copy required DLLs** to the executable directory (`build\bin\Release\`)
