@@ -39,10 +39,10 @@ extern "C"
 #include <stdio.h>
 #include <new>
 #include "video/vpp.h"
-#include "core/profiling.h"
+#include "utils/profiling.h"
 #include "device/texture_resource_pool.h"
 #include "inference/vlm_chat.h"
-#include "core/debug.h"
+#include "utils/debug.h"
 #include "video/frame_selector.h"
 #include "inference/continuous_batching_chat.h"
 // Config loader

@@ -1,5 +1,5 @@
 #include "texture_resource_pool.h"
-#include "../core/debug.h"
+#include "../utils/debug.h"
 
 // 初始化资源池
 void TextureResourcePool::Initialize(size_t poolSize) {

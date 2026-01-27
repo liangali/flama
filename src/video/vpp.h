@@ -10,7 +10,7 @@
 #include <memory>
 #include <vector>
 #include "../device/hw_device.h"
-#include "../core/util.h"
+#include "../utils/util.h"
 
 #ifdef TOOLS_ENABLE_OPENCL
     #include "../device/process_frames_ocl.h"

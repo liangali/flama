@@ -1,6 +1,6 @@
 #pragma once
 #include <openvino/openvino.hpp>
-#include "../core/util.h"
+#include "../utils/util.h"
 #include <iterator>
 #include <memory>
 #include <sstream>

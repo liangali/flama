@@ -11,8 +11,27 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <ostream>
+#include <string>
+#include <vector>
+
 #include "./defs.h"
 #include <openvino/genai/continuous_batching_pipeline.hpp>
+
+#ifdef USE_MEDIASDK1
+#include "mfxvideo.h"
+enum {
+    MFX_FOURCC_I420 = MFX_FOURCC_IYUV /*!< Alias for the IYUV color format. */
+};
+#else
+#include "vpl/mfxjpeg.h"
+#include "vpl/mfxvideo.h"
+#endif
+
+#if (MFX_VERSION >= 2000)
+#include "vpl/mfxdispatcher.h"
+#endif
+
 #if defined(_WIN32) || defined(_WIN64)
 
     #include <atlbase.h>
@@ -34,6 +53,28 @@
     #include "va/va_drmcommon.h"
 
 #endif
+
+// VPL utility constants
+#define WAIT_100_MILLISECONDS 100
+#define MAX_PATH              260
+#define MAX_WIDTH             3840
+#define MAX_HEIGHT            2160
+#define IS_ARG_EQ(a, b)       (!strcmp((a), (b)))
+
+#define ALIGN16(value)           (((value + 15) >> 4) << 4)
+#define ALIGN32(X)               (((mfxU32)((X) + 31)) & (~(mfxU32)31))
+#define VPLVERSION(major, minor) (major << 16 | minor)
+
+#define VERIFY(x, y)               \
+    if (!(x)) {                    \
+        throw std::logic_error(y); \
+    }
+
+#define VERIFY2(x, y)      \
+    if (!(x)) {            \
+        printf("%s\n", y); \
+        return NULL;       \
+    }
 
 typedef struct _VideoSegParams {
     mfxIMPL impl;
@@ -161,5 +202,53 @@ struct VLMConfig {
     ov::genai::SchedulerConfig shedulerConfig;
 };
 extern VLMConfig g_vlmConfig;
+
+// ============================================================================
+// VPL Utility Functions (from legacy util.hpp)
+// ============================================================================
+
+// VPL Utility Types
+enum ExampleParams { PARAM_IMPL = 0, PARAM_INFILE, PARAM_INRES, PARAM_COUNT };
+enum ParamGroup {
+    PARAMS_CREATESESSION = 0,
+    PARAMS_DECODE,
+    PARAMS_ENCODE,
+    PARAMS_VPP,
+    PARAMS_TRANSCODE,
+    PARAMS_DECVPP
+};
+
+typedef struct _Params {
+    mfxIMPL impl;
+#if (MFX_VERSION >= 2000)
+    mfxVariant implValue;
+#endif
+
+    char* infileName;
+    char* inmodelName;
+
+    mfxU16 srcWidth;
+    mfxU16 srcHeight;
+
+    bool bZeroCopy;
+    bool bLegacyGen;
+} Params;
+
+// VPL Utility Functions
+char* ValidateFileName(char* in);
+bool ValidateSize(char* in, mfxU16* vsize, mfxU32 vmax);
+bool ParseArgsAndValidate(int argc, char* argv[], Params* params, ParamGroup group);
+void* InitAcceleratorHandle(mfxSession session, int* fd);
+void FreeAcceleratorHandle(void* accelHandle, int fd);
+void ShowImplementationInfo(mfxLoader loader, mfxU32 implnum);
+mfxU32 GetSurfaceSize(mfxU32 FourCC, mfxU32 width, mfxU32 height);
+int GetFreeSurfaceIndex(mfxFrameSurface1* SurfacesPool, mfxU16 nPoolSize);
+mfxStatus AllocateExternalSystemMemorySurfacePool(mfxU8** buf,
+                                                   mfxFrameSurface1* surfpool,
+                                                   mfxFrameInfo frame_info,
+                                                   mfxU16 surfnum);
+void FreeExternalSystemMemorySurfacePool(mfxU8* dec_buf, mfxFrameSurface1* surfpool);
+mfxStatus ReadEncodedStream(mfxBitstream& bs, FILE* f);
+void PrintInputAndOutputsInfo(const ov::Model& network);
 
 #endif // TOOLS_CLI_VAL_SURFACE_SHARING_SRC_UTIL_H_

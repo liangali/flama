@@ -7,9 +7,9 @@
 #include "vpp.h" //NOLINT
 #include <algorithm>
 #include "../device/hw_device.h"
-#include "../core/util.h"
-#include "../core/profiling.h"
-#include "../core/debug.h"
+#include "../utils/util.h"
+#include "../utils/profiling.h"
+#include "../utils/debug.h"
 
 CVPPTest::CVPPTest()
         : m_tIndex(0),

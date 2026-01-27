@@ -63,13 +63,12 @@ add_executable(flama ${FLAMA_SOURCES})
 # Include directories - include all src subdirectories for modular structure
 target_include_directories(flama PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/utils
     ${CMAKE_CURRENT_SOURCE_DIR}/src/config
     ${CMAKE_CURRENT_SOURCE_DIR}/src/device
     ${CMAKE_CURRENT_SOURCE_DIR}/src/video
     ${CMAKE_CURRENT_SOURCE_DIR}/src/inference
     ${CMAKE_CURRENT_SOURCE_DIR}/src/image
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/compat
     ${FFMPEG_INCLUDE_DIRS}
     ${OpenVINO_INCLUDE_DIRS}
     ${VPL_INCLUDE_DIRS}
@@ -116,15 +115,15 @@ if(BUILD_BENCHMARKS)
     add_executable(flama_benchmark
         ${CMAKE_CURRENT_SOURCE_DIR}/src/examples/continuous_batching_benchmark.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/inference/continuous_batching_chat.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/core/util.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/core/debug.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/utils/util.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/utils/debug.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/config/parse_options.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/config/json_config.cpp
     )
 
     target_include_directories(flama_benchmark PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/utils
         ${CMAKE_CURRENT_SOURCE_DIR}/src/config
         ${CMAKE_CURRENT_SOURCE_DIR}/src/inference
         ${OpenVINO_INCLUDE_DIRS}

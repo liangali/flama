@@ -12,11 +12,11 @@
 using Microsoft::WRL::ComPtr;
 #endif
 
-#include "../core/profiling.h"
-#include "../core/debug.h"
+#include "../utils/profiling.h"
+#include "../utils/debug.h"
 #include <mutex>
 #include <fstream>
-#include "../core/util.h"
+#include "../utils/util.h"
 
 // Result file handling (append per generation)
 namespace
