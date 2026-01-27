@@ -1,4 +1,4 @@
-# Flama - FLAMA: Fast Library for AI Multimodal Acceleration
+# FLAMA - Fast Library for AI Multimodal Acceleration
 
 Flama is a C++ video processing pipeline that demonstrates advanced hardware-accelerated video decoding, processing, and AI-driven scene understanding using FFmpeg, Intel OpenVINO, oneVPL, and OpenCL.
 
