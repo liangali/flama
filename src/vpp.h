@@ -9,8 +9,8 @@
 
 #include <memory>
 #include <vector>
-#include "./hw-device.h"
-#include "./util.h"
+#include "hw_device.h"
+#include "util.h"
 
 #ifdef TOOLS_ENABLE_OPENCL
     #include "./process-frames-ocl.h"

@@ -1,4 +1,4 @@
-#include "videoSegment.h"
+#include "video_segment.h"
 #include <atlbase.h>
 #include <d3d11.h>
 #include <wincodec.h>

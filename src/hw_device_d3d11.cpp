@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: MIT
 //==============================================================================
 
-#include "./hw-device.h"
+#include "hw_device.h"
 
 mfxStatus DevCtxD3D11::InitDevice(mfxU32 nAdapterNum, mfxHandleType *pHandleType, mfxHDL *pHandle) {
     mfxStatus sts = MFX_ERR_NONE;

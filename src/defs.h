@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "vpl/mfx.h"
+#include "vpl/mfxmemory.h"
 
 #define DEF_DST_WIDTH  640
 #define DEF_DST_HEIGHT 480

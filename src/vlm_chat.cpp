@@ -1,10 +1,10 @@
 
 // VLM chat via openvino genai
 // #include <openvino/genai/visual_language/pipeline.hpp>
-#include "vlm-chat.h"
+#include "vlm_chat.h"
 #include <filesystem>
 #include <openvino/genai/tokenizer.hpp>
-#include "FrameSelector.h" // for WideToUtf8/Utf8ToWide helpers
+#include "frame_selector.h" // for WideToUtf8/Utf8ToWide helpers
 
 // For Microsoft::WRL::ComPtr smart COM pointer
 #ifdef _WIN32
