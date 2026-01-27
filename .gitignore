@@ -1,8 +1,8 @@
-# Build directories
+# Build directories (root level only)
 build/
 out/
-bin/
-lib/
+/bin/
+/lib/
 x64/
 x86/
 Release/
@@ -17,6 +17,7 @@ cmake_install.cmake
 Makefile
 *.cmake
 !CMakeLists.txt
+!thirdparty/_vplinstall/**/*.cmake
 CMakeSettings.json
 .cmake/
 
@@ -47,6 +48,7 @@ vcpkg_installed/
 *.so
 *.dylib
 *.lib
+!thirdparty/_vplinstall/**/*.lib
 *.a
 *.pdb
 *.ilk
