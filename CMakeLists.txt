@@ -124,6 +124,150 @@ if(BUILD_BENCHMARKS)
     )
 endif()
 
+# Post-build: Copy runtime dependencies to output directory
+if(WIN32)
+    # Helper function to copy DLLs
+    function(copy_dlls_to_output target_name dll_dir dll_pattern)
+        add_custom_command(TARGET ${target_name} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${target_name}>
+            COMMAND ${CMAKE_COMMAND} -E echo "Copying DLLs from ${dll_dir} matching ${dll_pattern}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${dll_dir}/${dll_pattern}"
+                $<TARGET_FILE_DIR:${target_name}>
+            COMMAND_EXPAND_LISTS
+            VERBATIM
+        )
+    endfunction()
+
+    # 1. Copy OpenVINO Runtime DLLs
+    # Try environment variable first, then fallback to common install locations
+    set(OPENVINO_BIN_DIR "")
+    if(DEFINED ENV{OPENVINO_DIR})
+        set(OPENVINO_BIN_DIR "$ENV{OPENVINO_DIR}/../runtime/bin/intel64/Release")
+    elseif(DEFINED OpenVINO_DIR)
+        get_filename_component(OPENVINO_BIN_DIR "${OpenVINO_DIR}/../../../bin/intel64/Release" ABSOLUTE)
+    endif()
+
+    # Fallback: check common installation path
+    if(NOT OPENVINO_BIN_DIR OR NOT EXISTS "${OPENVINO_BIN_DIR}")
+        if(EXISTS "D:/library/openvino/openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64/runtime/bin/intel64/Release")
+            set(OPENVINO_BIN_DIR "D:/library/openvino/openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64/runtime/bin/intel64/Release")
+        endif()
+    endif()
+
+    if(OPENVINO_BIN_DIR AND EXISTS "${OPENVINO_BIN_DIR}")
+        file(GLOB OPENVINO_DLLS "${OPENVINO_BIN_DIR}/*.dll")
+        if(OPENVINO_DLLS)
+            add_custom_command(TARGET flama POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying OpenVINO Runtime DLLs from ${OPENVINO_BIN_DIR}..."
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${OPENVINO_DLLS} $<TARGET_FILE_DIR:flama>
+                VERBATIM
+            )
+        endif()
+
+        # Copy TBB DLLs (OpenVINO dependency)
+        get_filename_component(OPENVINO_ROOT "${OPENVINO_BIN_DIR}/../../../../" ABSOLUTE)
+        set(TBB_BIN_DIR "${OPENVINO_ROOT}/runtime/3rdparty/tbb/bin")
+        if(EXISTS "${TBB_BIN_DIR}")
+            file(GLOB TBB_DLLS "${TBB_BIN_DIR}/*.dll")
+            if(TBB_DLLS)
+                add_custom_command(TARGET flama POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E echo "Copying TBB DLLs from ${TBB_BIN_DIR}..."
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TBB_DLLS} $<TARGET_FILE_DIR:flama>
+                    VERBATIM
+                )
+            endif()
+        endif()
+    endif()
+
+    # 2. Copy OpenVINO GenAI DLLs
+    set(GENAI_BIN_DIR "")
+    if(DEFINED ENV{OpenVINOGenAI_DIR})
+        set(GENAI_BIN_DIR "$ENV{OpenVINOGenAI_DIR}/../runtime/bin/intel64/Release")
+    elseif(DEFINED OpenVINOGenAI_DIR)
+        get_filename_component(GENAI_BIN_DIR "${OpenVINOGenAI_DIR}/../../../bin/intel64/Release" ABSOLUTE)
+    endif()
+
+    # Fallback: check common installation path
+    if(NOT GENAI_BIN_DIR OR NOT EXISTS "${GENAI_BIN_DIR}")
+        if(EXISTS "D:/library/openvino.genai/openvino_genai_windows_2025.4.2.0_x86_64/runtime/bin/intel64/Release")
+            set(GENAI_BIN_DIR "D:/library/openvino.genai/openvino_genai_windows_2025.4.2.0_x86_64/runtime/bin/intel64/Release")
+        endif()
+    endif()
+
+    if(GENAI_BIN_DIR AND EXISTS "${GENAI_BIN_DIR}")
+        file(GLOB GENAI_DLLS "${GENAI_BIN_DIR}/*.dll")
+        if(GENAI_DLLS)
+            add_custom_command(TARGET flama POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying OpenVINO GenAI DLLs from ${GENAI_BIN_DIR}..."
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${GENAI_DLLS} $<TARGET_FILE_DIR:flama>
+                VERBATIM
+            )
+        endif()
+    endif()
+
+    # 3. Copy VPL DLLs
+    set(VPL_BIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/_vplinstall/bin")
+    file(GLOB VPL_DLLS "${VPL_BIN_DIR}/*.dll")
+    if(VPL_DLLS)
+        add_custom_command(TARGET flama POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E echo "Copying VPL DLLs..."
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${VPL_DLLS} $<TARGET_FILE_DIR:flama>
+            VERBATIM
+        )
+    endif()
+
+    # 4. Copy vcpkg DLLs (FFmpeg, etc.)
+    if(DEFINED VCPKG_INSTALLED_DIR)
+        set(VCPKG_BIN_DIR "${VCPKG_INSTALLED_DIR}/x64-windows/bin")
+        file(GLOB VCPKG_DLLS "${VCPKG_BIN_DIR}/*.dll")
+        if(VCPKG_DLLS)
+            add_custom_command(TARGET flama POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying vcpkg DLLs (FFmpeg, etc.)..."
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${VCPKG_DLLS} $<TARGET_FILE_DIR:flama>
+                VERBATIM
+            )
+        endif()
+    elseif(EXISTS "${CMAKE_BINARY_DIR}/vcpkg_installed/x64-windows/bin")
+        set(VCPKG_BIN_DIR "${CMAKE_BINARY_DIR}/vcpkg_installed/x64-windows/bin")
+        file(GLOB VCPKG_DLLS "${VCPKG_BIN_DIR}/*.dll")
+        if(VCPKG_DLLS)
+            add_custom_command(TARGET flama POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying vcpkg DLLs (FFmpeg, etc.)..."
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${VCPKG_DLLS} $<TARGET_FILE_DIR:flama>
+                VERBATIM
+            )
+        endif()
+    endif()
+
+    # Print summary of DLL copy operations
+    message(STATUS "")
+    message(STATUS "DLL Copy Configuration:")
+    if(OPENVINO_BIN_DIR AND EXISTS "${OPENVINO_BIN_DIR}")
+        message(STATUS "  OpenVINO Runtime DLLs: ${OPENVINO_BIN_DIR}")
+        if(TBB_BIN_DIR AND EXISTS "${TBB_BIN_DIR}")
+            message(STATUS "  TBB DLLs: ${TBB_BIN_DIR}")
+        endif()
+    else()
+        message(STATUS "  OpenVINO Runtime DLLs: NOT FOUND")
+    endif()
+    if(GENAI_BIN_DIR AND EXISTS "${GENAI_BIN_DIR}")
+        message(STATUS "  OpenVINO GenAI DLLs: ${GENAI_BIN_DIR}")
+    else()
+        message(STATUS "  OpenVINO GenAI DLLs: NOT FOUND")
+    endif()
+    if(VPL_BIN_DIR AND EXISTS "${VPL_BIN_DIR}")
+        message(STATUS "  VPL DLLs: ${VPL_BIN_DIR}")
+    else()
+        message(STATUS "  VPL DLLs: NOT FOUND")
+    endif()
+    if(DEFINED VCPKG_BIN_DIR)
+        message(STATUS "  vcpkg DLLs: ${VCPKG_BIN_DIR}")
+    endif()
+    message(STATUS "  Target directory: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Release")
+    message(STATUS "")
+endif()
+
 # Install targets
 install(TARGETS flama
     RUNTIME DESTINATION bin
