@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 
+#define ONEVPL_EXPERIMENTAL
 #include "vpl/mfx.h"
 #include "vpl/mfxmemory.h"
 

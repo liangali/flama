@@ -27,11 +27,11 @@
 #endif
 #include <openvino/runtime/intel_gpu/properties.hpp>
 
-#include "./vpp.h" //NOLINT
+#include "vpp.h" //NOLINT
 #include <algorithm>
-#include "./hw-device.h"
-#include "./util.h"
-#include "VideoSegment.h"
+#include "hw_device.h"
+#include "util.h"
+#include "video_segment.h"
 #define BITSTREAM_BUFFER_SIZE      2000000
 #define SYNC_TIMEOUT               60000
 #define MAJOR_API_VERSION_REQUIRED 2

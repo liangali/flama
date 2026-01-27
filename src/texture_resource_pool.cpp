@@ -4,7 +4,7 @@
 // 初始化资源池
 void TextureResourcePool::Initialize(size_t poolSize) {
     resources.resize(poolSize);
-    DBG_LOG("xxxxxxxxxxxxxx Initialize resources.size=%d poolSize=%d\n", resources.size(), poolSize);
+    DBG_LOGF("xxxxxxxxxxxxxx Initialize resources.size=%d poolSize=%d", resources.size(), poolSize);
 }
 
 // 获取空闲资源

@@ -3,6 +3,7 @@
 #include <d3d11.h>
 #include <wincodec.h>
 #include <windows.h>
+#include <shellapi.h>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -37,15 +38,15 @@ extern "C"
 #include <dxgi1_2.h>
 #include <stdio.h>
 #include <new>
-#include "./vpp.h"
-#include "./profiling.h"
-#include "./TextureResourcePool.h"
-#include "vlm-chat.h"
+#include "vpp.h"
+#include "profiling.h"
+#include "texture_resource_pool.h"
+#include "vlm_chat.h"
 #include "debug.h"
-#include "FrameSelector.h"
+#include "frame_selector.h"
 #include "continuous_batching_chat.h"
 // Config loader
-#include "config/json_config.hpp"
+#include "json_config.hpp"
 #include "parse_options.h"
 // #include "VideoSampling.h"
 // #include "VideoSegmentation.h"

@@ -43,7 +43,7 @@ static void LogVLMModelDeviceInfo(const std::string& modelDir, const std::string
 {
     DBG_LOG(std::string("[VLM] Model directory: ") + modelDir);
     DBG_LOG(std::string("[VLM] Target device: ") + device);
-    DBG_LOG("[VLM] OpenVINO version: ", ov::get_openvino_version());
+    DBG_LOG(std::string("[VLM] OpenVINO version: ") + ov::get_openvino_version().buildNumber);
 
     // 可用设备枚举
     try

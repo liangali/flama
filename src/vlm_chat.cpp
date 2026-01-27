@@ -471,7 +471,7 @@ bool CheckGenAIEnvironment(const std::string &modelDir,
                            bool runTestInference)
 {
     namespace fs = std::filesystem;
-    DBG_LOG("[GenAI] OpenVINO Version: ", ov::get_openvino_version());
+    DBG_LOG(std::string("[GenAI] OpenVINO Version: ") + ov::get_openvino_version().buildNumber);
 
     // 1. 模型目录检查
     if (!fs::exists(modelDir) || !fs::is_directory(modelDir))

@@ -4,10 +4,10 @@
 // SPDX-License-Identifier: MIT
 //==============================================================================
 
-#include "./vpp.h" //NOLINT
+#include "vpp.h" //NOLINT
 #include <algorithm>
-#include "./hw-device.h"
-#include "./util.h"
+#include "hw_device.h"
+#include "util.h"
 #include "profiling.h"
 #include "debug.h"
 
