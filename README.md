@@ -222,9 +222,8 @@ cd build
 
 # Configure CMake - it will find OpenVINO automatically via environment variables
 # VPL is bundled in thirdparty, specify its path explicitly
-cmake .. -G "Visual Studio 17 2022" -A x64 `
-  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
-  -DVPL_DIR="$PWD\..\thirdparty\_vplinstall\lib\cmake\vpl"
+cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE="C:\vcpkg\scripts\buildsystems\vcpkg.cmake" -DVPL_DIR="D:\code\flama_code\flama\thirdparty\_vplinstall\lib\cmake\vpl"
+
 
 # Build the project
 cmake --build . --config Release

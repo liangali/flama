@@ -11,18 +11,22 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # Find required packages
-find_package(PkgConfig REQUIRED)
-
 # FFmpeg
 find_package(FFMPEG REQUIRED)
 if(FFMPEG_FOUND)
     message(STATUS "Found FFmpeg: ${FFMPEG_INCLUDE_DIRS}")
 endif()
 
-# OpenVINO
-find_package(OpenVINO REQUIRED COMPONENTS Runtime GenAI)
+# OpenVINO Runtime
+find_package(OpenVINO REQUIRED COMPONENTS Runtime)
 if(OpenVINO_FOUND)
     message(STATUS "Found OpenVINO: ${OpenVINO_VERSION}")
+endif()
+
+# OpenVINO GenAI (separate package)
+find_package(OpenVINOGenAI REQUIRED)
+if(OpenVINOGenAI_FOUND)
+    message(STATUS "Found OpenVINO GenAI: ${OpenVINOGenAI_VERSION}")
 endif()
 
 # nlohmann_json
@@ -69,7 +73,7 @@ target_link_libraries(flama PRIVATE
     openvino::runtime
     openvino::genai
     nlohmann_json::nlohmann_json
-    VPL::VPL
+    VPL::dispatcher
     OpenCL::OpenCL
     d3d11
     dxgi
