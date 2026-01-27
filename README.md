@@ -60,33 +60,95 @@ Set the vcpkg environment variable:
 setx VCPKG_ROOT "C:\vcpkg"
 ```
 
-### 2. Install OpenVINO
+### 2. Install OpenVINO and OpenVINO GenAI
 
-Download and install Intel OpenVINO Runtime and OpenVINO GenAI:
+Download the pre-built archives and extract them:
 
-1. Visit [OpenVINO Downloads](https://www.intel.com/content/www/us/en/developer/tools/openvino-toolkit/download.html)
-2. Download the Windows installer
-3. Install to default location (e.g., `C:\Program Files (x86)\Intel\openvino_2025`)
-4. Set environment variables:
+1. **OpenVINO Runtime**: Download from [OpenVINO Archives](https://storage.openvinotoolkit.org/repositories/openvino/packages/) or [GitHub Releases](https://github.com/openvinotoolkit/openvino/releases)
+2. **OpenVINO GenAI**: Download from [GenAI Releases](https://github.com/openvinotoolkit/openvino.genai/releases)
 
-```powershell
-# Add to system PATH
-setx PATH "%PATH%;C:\Program Files (x86)\Intel\openvino_2025\runtime\bin\intel64\Release"
+Extract to your preferred location. Example paths used in this guide:
 
-# Set OpenVINO environment
-setx OPENVINO_DIR "C:\Program Files (x86)\Intel\openvino_2025"
+```
+D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64
+D:\library\openvino.genai\openvino_genai_windows_2025.4.2.0_x86_64
 ```
 
-Download OpenVINO GenAI:
+#### Directory Structure
+
+Both packages have the same structure:
+
+```
+<package_root>/
+├── setupvars.bat          # Environment initialization script
+├── setupvars.ps1          # PowerShell variant
+├── runtime/
+│   ├── cmake/             # CMake config files (OpenVINOConfig.cmake, OpenVINOGenAIConfig.cmake)
+│   ├── bin/intel64/Release/  # DLLs (openvino.dll, openvino_genai.dll, plugins, etc.)
+│   ├── include/openvino/    # Header files
+│   └── 3rdparty/tbb/      # TBB dependency (OpenVINO only)
+├── python/                # Python bindings
+└── samples/               # Example code
+```
+
+#### Option A: Use setupvars.bat (Per-Session)
+
+Run before each build/run session:
+
+```cmd
+:: Initialize OpenVINO environment
+call "D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\setupvars.bat"
+
+:: Initialize GenAI environment (run AFTER OpenVINO setupvars)
+call "D:\library\openvino.genai\openvino_genai_windows_2025.4.2.0_x86_64\setupvars.bat"
+```
+
+This sets:
+- `OpenVINO_DIR` → `<openvino_root>\runtime\cmake`
+- `OpenVINOGenAI_DIR` → `<genai_root>\runtime\cmake`
+- `TBB_DIR` → `<openvino_root>\runtime\3rdparty\tbb\lib\cmake\TBB`
+- `PATH` includes DLL directories
+
+#### Option B: Set Persistent Environment Variables
+
+Set these environment variables permanently (adjust paths to your installation):
 
 ```powershell
-# Download pre-built binaries from GitHub releases
-# Or build from source: https://github.com/openvinotoolkit/openvino.genai
+# OpenVINO CMake config directory
+setx OpenVINO_DIR "D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\cmake"
 
-# Extract to a location, e.g., C:\openvino.genai
-# Set environment variable
-setx OPENVINO_GENAI_DIR "C:\openvino.genai"
+# OpenVINO GenAI CMake config directory
+setx OpenVINOGenAI_DIR "D:\library\openvino.genai\openvino_genai_windows_2025.4.2.0_x86_64\runtime\cmake"
+
+# TBB CMake config directory
+setx TBB_DIR "D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\3rdparty\tbb\lib\cmake\TBB"
 ```
+
+Add DLL directories to PATH:
+
+```powershell
+# Add OpenVINO and GenAI DLLs to PATH
+setx PATH "%PATH%;D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\bin\intel64\Release;D:\library\openvino.genai\openvino_genai_windows_2025.4.2.0_x86_64\runtime\bin\intel64\Release;D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\3rdparty\tbb\bin"
+```
+
+**Note**: Close and reopen your terminal after setting environment variables with `setx`.
+
+#### Required DLLs at Runtime
+
+From **OpenVINO** (`runtime/bin/intel64/Release/`):
+- `openvino.dll` - Core runtime
+- `openvino_intel_gpu_plugin.dll` - GPU inference (for `device="GPU"`)
+- `openvino_intel_cpu_plugin.dll` - CPU inference fallback
+- `openvino_auto_plugin.dll` - AUTO device selection
+- Various frontend DLLs (onnx, pytorch, etc.)
+
+From **OpenVINO GenAI** (`runtime/bin/intel64/Release/`):
+- `openvino_genai.dll` - GenAI runtime
+- `openvino_tokenizers.dll` - Tokenizer support
+- `icudt70.dll`, `icuuc70.dll` - ICU unicode libraries
+
+From **TBB** (`runtime/3rdparty/tbb/bin/`):
+- `tbb12.dll` - Threading Building Blocks
 
 ### 3. Install oneVPL
 
@@ -122,7 +184,26 @@ This will install:
 
 ## Building the Project
 
-### Option 1: Using CMake with vcpkg Integration
+### Prerequisites Check
+
+Before building, ensure you have initialized the OpenVINO environment. Choose one method:
+
+**Method 1: Run setupvars (recommended for first-time setup)**
+```cmd
+call "D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\setupvars.bat"
+call "D:\library\openvino.genai\openvino_genai_windows_2025.4.2.0_x86_64\setupvars.bat"
+```
+
+**Method 2: Verify environment variables are set**
+```powershell
+echo $env:OpenVINO_DIR      # Should show: ...\runtime\cmake
+echo $env:OpenVINOGenAI_DIR # Should show: ...\runtime\cmake
+echo $env:TBB_DIR           # Should show: ...\3rdparty\tbb\lib\cmake\TBB
+```
+
+### Option 1: Using Environment Variables (Recommended)
+
+If you have set `OpenVINO_DIR`, `OpenVINOGenAI_DIR`, and `TBB_DIR` environment variables (via setupvars.bat or setx):
 
 ```powershell
 # Navigate to project directory
@@ -132,10 +213,9 @@ cd D:\code\flama_code\flama
 mkdir build
 cd build
 
-# Configure CMake with vcpkg toolchain
+# Configure CMake - it will find OpenVINO automatically via environment variables
 cmake .. -G "Visual Studio 17 2022" -A x64 `
-  -DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake" `
-  -DCMAKE_BUILD_TYPE=Release
+  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
 
 # Build the project
 cmake --build . --config Release
@@ -143,29 +223,26 @@ cmake --build . --config Release
 # The executable will be in: build\bin\Release\flama.exe
 ```
 
-### Option 2: Using vcpkg Manifest Mode (Recommended)
+### Option 2: Explicit CMake Paths
+
+If environment variables are not set, specify paths directly:
 
 ```powershell
-# Navigate to project directory
 cd D:\code\flama_code\flama
-
-# Create build directory
 mkdir build
 cd build
 
-# Configure with vcpkg automatic integration
+# Configure with explicit OpenVINO paths
 cmake .. -G "Visual Studio 17 2022" -A x64 `
-  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
+  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
+  -DOpenVINO_DIR="D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\cmake" `
+  -DOpenVINOGenAI_DIR="D:\library\openvino.genai\openvino_genai_windows_2025.4.2.0_x86_64\runtime\cmake" `
+  -DTBB_DIR="D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\3rdparty\tbb\lib\cmake\TBB"
 
-# Build
 cmake --build . --config Release
-
-# The executable will be in: build\bin\Release\flama.exe
 ```
 
 ### Build Options
-
-You can enable optional features during CMake configuration:
 
 ```powershell
 # Build with benchmark executables
@@ -320,17 +397,29 @@ Output files are saved in the output directory specified (default: current direc
 
 ## Troubleshooting
 
-### CMake Cannot Find Packages
+### CMake Cannot Find OpenVINO or OpenVINO GenAI
 
-If CMake cannot find OpenVINO, oneVPL, or other dependencies:
+If CMake cannot find OpenVINO packages:
 
-1. Verify environment variables are set correctly
-2. Add package paths to CMAKE_PREFIX_PATH:
+1. **Run setupvars.bat** before configuring CMake:
+   ```cmd
+   call "D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\setupvars.bat"
+   call "D:\library\openvino.genai\openvino_genai_windows_2025.4.2.0_x86_64\setupvars.bat"
+   ```
 
-```powershell
-cmake .. -DCMAKE_PREFIX_PATH="C:/Program Files (x86)/Intel/openvino_2025;C:/Program Files/Intel/oneVPL" `
-  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
-```
+2. **Or specify paths explicitly** in cmake command:
+   ```powershell
+   cmake .. -G "Visual Studio 17 2022" -A x64 `
+     -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
+     -DOpenVINO_DIR="D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\cmake" `
+     -DOpenVINOGenAI_DIR="D:\library\openvino.genai\openvino_genai_windows_2025.4.2.0_x86_64\runtime\cmake" `
+     -DTBB_DIR="D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\3rdparty\tbb\lib\cmake\TBB"
+   ```
+
+3. **Verify the cmake directory exists** and contains `OpenVINOConfig.cmake`:
+   ```powershell
+   dir "D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\cmake"
+   ```
 
 ### vcpkg Install Fails
 
@@ -344,9 +433,30 @@ If vcpkg fails to install dependencies:
 
 If the executable fails to run due to missing DLLs:
 
-1. Ensure OpenVINO, oneVPL, and FFmpeg bin directories are in PATH
-2. Copy required DLLs to the executable directory
-3. Use `dumpbin /dependents flama.exe` to check dependencies
+1. **Run setupvars.bat** before running the application:
+   ```cmd
+   call "D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\setupvars.bat"
+   call "D:\library\openvino.genai\openvino_genai_windows_2025.4.2.0_x86_64\setupvars.bat"
+   ```
+
+2. **Or add DLL directories to PATH** permanently:
+   ```powershell
+   # OpenVINO DLLs
+   D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\bin\intel64\Release
+
+   # GenAI DLLs
+   D:\library\openvino.genai\openvino_genai_windows_2025.4.2.0_x86_64\runtime\bin\intel64\Release
+
+   # TBB DLLs
+   D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\3rdparty\tbb\bin
+   ```
+
+3. **Or copy required DLLs** to the executable directory (`build\bin\Release\`)
+
+4. **Check dependencies** using:
+   ```cmd
+   dumpbin /dependents build\bin\Release\flama.exe
+   ```
 
 ### Hardware Decode Not Working
 
