@@ -9,11 +9,11 @@
 
 #include <memory>
 #include <vector>
-#include "hw_device.h"
-#include "util.h"
+#include "../device/hw_device.h"
+#include "../core/util.h"
 
 #ifdef TOOLS_ENABLE_OPENCL
-    #include "./process-frames-ocl.h"
+    #include "../device/process_frames_ocl.h"
 #endif
 
 class CVPPTest : public CTest {

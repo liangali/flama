@@ -1,4 +1,4 @@
-#include "video_segment.h"
+#include "video/video_segment.h"
 #include <atlbase.h>
 #include <d3d11.h>
 #include <wincodec.h>
@@ -38,16 +38,16 @@ extern "C"
 #include <dxgi1_2.h>
 #include <stdio.h>
 #include <new>
-#include "vpp.h"
-#include "profiling.h"
-#include "texture_resource_pool.h"
-#include "vlm_chat.h"
-#include "debug.h"
-#include "frame_selector.h"
-#include "continuous_batching_chat.h"
+#include "video/vpp.h"
+#include "core/profiling.h"
+#include "device/texture_resource_pool.h"
+#include "inference/vlm_chat.h"
+#include "core/debug.h"
+#include "video/frame_selector.h"
+#include "inference/continuous_batching_chat.h"
 // Config loader
-#include "json_config.hpp"
-#include "parse_options.h"
+#include "config/json_config.hpp"
+#include "config/parse_options.h"
 // #include "VideoSampling.h"
 // #include "VideoSegmentation.h"
 ID3D11Device *m_pD3D11Device = NULL;

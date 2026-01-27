@@ -5,7 +5,7 @@
 //==============================================================================
 
 #ifdef TOOLS_ENABLE_OPENCL
-    #include "./process-frames-ocl.h"
+    #include "process_frames_ocl.h"
 
 // following is from MSDK samples (sample_plugin_opencl) - see opencl_filter_dx11.cpp
 

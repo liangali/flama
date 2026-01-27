@@ -44,23 +44,32 @@ if(OpenCL_FOUND)
     message(STATUS "Found OpenCL: ${OpenCL_VERSION_STRING}")
 endif()
 
-# Collect all source files
+# Collect all source files from modular structure
 file(GLOB_RECURSE FLAMA_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
 )
 
-# Remove benchmark and test files from main executable
+# Remove example/benchmark files from main executable (all files in examples/ folder)
+list(FILTER FLAMA_SOURCES EXCLUDE REGEX ".*/examples/.*")
 list(FILTER FLAMA_SOURCES EXCLUDE REGEX ".*continuous_batching_benchmark\\.cpp$")
 list(FILTER FLAMA_SOURCES EXCLUDE REGEX ".*visual_language_chat\\.cpp$")
 list(FILTER FLAMA_SOURCES EXCLUDE REGEX ".*ffmpeg_tuning\\.cpp$")
 list(FILTER FLAMA_SOURCES EXCLUDE REGEX ".*vpl_infer\\.cpp$")
+list(FILTER FLAMA_SOURCES EXCLUDE REGEX ".*vlm_service\\.cpp$")
 
 # Main executable
 add_executable(flama ${FLAMA_SOURCES})
 
-# Include directories
+# Include directories - include all src subdirectories for modular structure
 target_include_directories(flama PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/config
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/device
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/video
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/inference
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/image
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/compat
     ${FFMPEG_INCLUDE_DIRS}
     ${OpenVINO_INCLUDE_DIRS}
     ${VPL_INCLUDE_DIRS}
@@ -105,15 +114,19 @@ endif()
 option(BUILD_BENCHMARKS "Build benchmark executables" OFF)
 if(BUILD_BENCHMARKS)
     add_executable(flama_benchmark
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/continuous_batching_benchmark.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/continuous_batching_chat.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/util.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/parse_options.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/json_config.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/examples/continuous_batching_benchmark.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/inference/continuous_batching_chat.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core/util.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core/debug.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/config/parse_options.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/config/json_config.cpp
     )
 
     target_include_directories(flama_benchmark PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/config
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/inference
         ${OpenVINO_INCLUDE_DIRS}
     )
 

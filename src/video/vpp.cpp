@@ -6,10 +6,10 @@
 
 #include "vpp.h" //NOLINT
 #include <algorithm>
-#include "hw_device.h"
-#include "util.h"
-#include "profiling.h"
-#include "debug.h"
+#include "../device/hw_device.h"
+#include "../core/util.h"
+#include "../core/profiling.h"
+#include "../core/debug.h"
 
 CVPPTest::CVPPTest()
         : m_tIndex(0),

@@ -20,7 +20,7 @@
 #include "openvino/genai/generation_handle.hpp"
 // Declarations for Dataset/GenerationInfo and helpers
 #include "continuous_batching_chat.h"
-#include "util.h"
+#include "../core/util.h"
 
 // VLMConfig g_vlmConfig;
 ov::genai::ContinuousBatchingPipeline& GetCachedCBPipeline()

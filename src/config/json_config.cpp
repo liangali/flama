@@ -4,11 +4,11 @@
 #include <sstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
-#include "debug.h"
+#include "../core/debug.h"
 
 // External symbols we will update
-#include "continuous_batching_chat.h"
-#include "util.h"
+#include "../inference/continuous_batching_chat.h"
+#include "../core/util.h"
 using nlohmann::json;
 
 static std::string ReadFileUtf8(const std::string& path, bool& ok) {

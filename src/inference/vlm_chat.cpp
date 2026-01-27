@@ -4,7 +4,7 @@
 #include "vlm_chat.h"
 #include <filesystem>
 #include <openvino/genai/tokenizer.hpp>
-#include "frame_selector.h" // for WideToUtf8/Utf8ToWide helpers
+#include "../video/frame_selector.h" // for WideToUtf8/Utf8ToWide helpers
 
 // For Microsoft::WRL::ComPtr smart COM pointer
 #ifdef _WIN32
@@ -12,11 +12,11 @@
 using Microsoft::WRL::ComPtr;
 #endif
 
-#include "profiling.h"
-#include "debug.h"
+#include "../core/profiling.h"
+#include "../core/debug.h"
 #include <mutex>
 #include <fstream>
-#include "util.h"
+#include "../core/util.h"
 
 // Result file handling (append per generation)
 namespace

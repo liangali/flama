@@ -9,7 +9,7 @@
 
 #include <string>
 
-#include "./defs.h"
+#include "../core/defs.h"
 
 // OpenCL headers
 #ifndef CL_TARGET_OPENCL_VERSION

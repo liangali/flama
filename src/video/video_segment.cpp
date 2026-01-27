@@ -29,8 +29,8 @@
 
 #include "vpp.h" //NOLINT
 #include <algorithm>
-#include "hw_device.h"
-#include "util.h"
+#include "../device/hw_device.h"
+#include "../core/util.h"
 #include "video_segment.h"
 #define BITSTREAM_BUFFER_SIZE      2000000
 #define SYNC_TIMEOUT               60000

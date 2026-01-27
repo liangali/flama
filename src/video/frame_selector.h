@@ -15,7 +15,7 @@ extern "C" {
 #include <libavutil/avutil.h>
 }
 
-#include "util.h"
+#include "../core/util.h"
 // 选中帧缓存条目
 struct FSSelected {
     AVFrame* frame = nullptr;  // 克隆的帧（引用底层数据）

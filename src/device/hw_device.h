@@ -8,7 +8,7 @@
 #define TOOLS_CLI_VAL_SURFACE_SHARING_SRC_HW_DEVICE_H_
 
 #include <memory>
-#include "./defs.h"
+#include "../core/defs.h"
 
 #if defined(_WIN32) || defined(_WIN64)
 
