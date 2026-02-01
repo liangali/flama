@@ -428,7 +428,7 @@ static void RunBatchSW()
         }
         else if (useN <= maxFrames)
         {
-            prompt = "请描述这个视频: ";
+            prompt = g_commonConfig.prompt_video;
             out = pipe.generate(prompt, ov::genai::videos(tensors));
         }
         else
@@ -814,7 +814,7 @@ static void RunBatchHW(/*bool use_cb*/)
             }
             else
             {
-                prompt = "请描述这个视频: ";
+                prompt = g_commonConfig.prompt_video;
                 // For CB path, collect params and enqueue after decode completes, chunking frames
                 if (useN <= maxFrames)
                 {
@@ -902,7 +902,7 @@ static void RunBatchHW(/*bool use_cb*/)
             }
             else if (useN <= maxFrames)
             {
-                prompt = "请描述这个视频: ";
+                prompt = g_commonConfig.prompt_video;
                 out = pipe.generate(prompt, ov::genai::videos(tensors), ov::genai::generation_config(config));
                 DBG_LOG(std::string("[VLM] Inference (batch ") + std::to_string(bs.batchIndex) + ") Output: " + out);
             }

@@ -82,6 +82,14 @@ ParsedArgs parseArgs(int argc, char* argv[]) {
             pa.cb_batch_size = std::max(0, std::stoi(a.substr(16).c_str()));
             g_batchConfig.cb_batch_size = std::max(0, std::stoi(a.substr(16).c_str()));
         }
+        else if (a == "--prompt" && (i + 1) < argc && argv[i + 1] && argv[i + 1][0] != '-') {
+            pa.prompt = argv[++i];
+            if (!pa.prompt.empty()) g_commonConfig.prompt_video = pa.prompt;
+        }
+        else if (a.rfind("--prompt=", 0) == 0) {
+            pa.prompt = a.substr(9);
+            if (!pa.prompt.empty()) g_commonConfig.prompt_video = pa.prompt;
+        }
         else if (a.rfind("--sel-policy=", 0) == 0) {
             std::string v = a.substr(13);
             if (v == "frame") g_fsConfig.policy = FSPolicy::FrameInterval;
@@ -234,6 +242,14 @@ ParsedArgsW parseArgsW(int argc, wchar_t* argv[]) {
         else if (a.rfind(L"--cb_batch_size=", 0) == 0) {
             pa.cb_batch_size = std::max(0, _wtoi(a.substr(16).c_str()));
             g_batchConfig.cb_batch_size = std::max(0, _wtoi(a.substr(16).c_str()));
+        }
+        else if (a == L"--prompt" && (i + 1) < argc && argv[i + 1] && argv[i + 1][0] != L'-') {
+            pa.prompt = argv[++i];
+            if (!pa.prompt.empty()) g_commonConfig.prompt_video = WideToUtf8(pa.prompt);
+        }
+        else if (a.rfind(L"--prompt=", 0) == 0) {
+            pa.prompt = a.substr(9);
+            if (!pa.prompt.empty()) g_commonConfig.prompt_video = WideToUtf8(pa.prompt);
         }
         else if (a.rfind(L"--sel-policy=", 0) == 0) {
             std::wstring v = a.substr(13);

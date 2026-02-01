@@ -181,6 +181,7 @@ struct CommonConfig {  // ȫ��ͨ������
     std::string log_path = "D:/logs";
     int vpp_down_width = 224;  // from common.vpp_downscaling.width
     int vpp_down_height = 224; // from common.vpp_downscaling.height
+    std::string prompt_video = "请用一句话精确的描述这个视频中的主要内容， 必须30字以内";
 };
 
 extern CommonConfig g_commonConfig;

@@ -343,7 +343,7 @@ void ProcessSampleAndMaybeInfer(const ov::Tensor &image_tensor)
     DBG_LOG(std::string("[VLM] Inference (frame ") + std::to_string(frameIdx) + ") Output: " + out);
         AppendResultRow(frameIdx, 1, prompt, out);
     } else {
-        prompt = "请描述这个视频: ";
+        prompt = g_commonConfig.prompt_video;
         try {
             out = pipe.generate(prompt, ov::genai::videos(st.buffer));
         } catch (const std::exception &ex) {
@@ -413,7 +413,7 @@ void ProcessInfer(const std::vector<ov::Tensor> &buffer)
     DBG_LOG(std::string("[VLM] Inference frame ") + std::to_string(GetSampleState().frameCounter) + ") Output: " + out);
 
     } else {
-        prompt = "请描述这个视频: ";
+        prompt = g_commonConfig.prompt_video;
         try {
             out = pipe.generate(prompt, ov::genai::videos(buffer));
         } catch (const std::exception &ex) {
