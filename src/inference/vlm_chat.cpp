@@ -17,14 +17,65 @@ using Microsoft::WRL::ComPtr;
 #include <mutex>
 #include <fstream>
 #include "../utils/util.h"
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 // Result file handling (append per generation)
 namespace
 {
-    std::mutex g_resMutex;
-    std::unique_ptr<std::ofstream> g_resFile;
-    bool g_headerWritten = false;
-    std::string g_inputFileName;
+    #ifdef _WIN32
+    using ResultMutex = SRWLOCK;
+    struct ResultLockGuard
+    {
+        explicit ResultLockGuard(ResultMutex &m) : mutex_(&m) { AcquireSRWLockExclusive(mutex_); }
+        ~ResultLockGuard() { ReleaseSRWLockExclusive(mutex_); }
+        ResultLockGuard(const ResultLockGuard &) = delete;
+        ResultLockGuard &operator=(const ResultLockGuard &) = delete;
+
+    private:
+        ResultMutex *mutex_;
+    };
+    #else
+    using ResultMutex = std::mutex;
+    using ResultLockGuard = std::lock_guard<ResultMutex>;
+    #endif
+
+    struct ResultState
+    {
+        ResultMutex mutex;
+        std::unique_ptr<std::ofstream> file;
+        bool headerWritten = false;
+        std::string inputFileName;
+        ResultState()
+        {
+        #ifdef _WIN32
+            InitializeSRWLock(&mutex);
+        #endif
+        }
+    };
+
+    // Use a heap-allocated singleton to avoid static init order/destruction issues.
+    ResultState& GetResultState()
+    {
+    #ifdef _WIN32
+        static INIT_ONCE once = INIT_ONCE_STATIC_INIT;
+        PVOID ctx = nullptr;
+        InitOnceExecuteOnce(
+            &once,
+            [](PINIT_ONCE, PVOID, PVOID *context) -> BOOL
+            {
+                *context = new ResultState();
+                return TRUE;
+            },
+            nullptr,
+            &ctx);
+        return *static_cast<ResultState*>(ctx);
+    #else
+        static ResultState* state = new ResultState();
+        return *state;
+    #endif
+    }
     inline std::string SanitizeCSV(const std::string &in)
     {
         std::string out;
@@ -42,53 +93,57 @@ namespace
     }
     void AppendResultRow(size_t frameIdx, size_t batchSize, const std::string &prompt, const std::string &text)
     {
-        std::lock_guard<std::mutex> lk(g_resMutex);
-        if (!g_resFile || !g_resFile->is_open())
+        ResultState& st = GetResultState();
+        ResultLockGuard lk(st.mutex);
+        if (!st.file || !st.file->is_open())
             return;
-        if (!g_headerWritten)
+        if (!st.headerWritten)
         {
-            (*g_resFile) << "frame,batch_size,input_file,prompt,result" << '\n';
-            g_headerWritten = true;
+            (*st.file) << "frame,batch_size,input_file,prompt,result" << '\n';
+            st.headerWritten = true;
         }
-        (*g_resFile) << frameIdx << ',' << batchSize << ',' << SanitizeCSV(g_inputFileName) << ',' << SanitizeCSV(prompt) << ',' << SanitizeCSV(text) << '\n';
+        (*st.file) << frameIdx << ',' << batchSize << ',' << SanitizeCSV(st.inputFileName) << ',' << SanitizeCSV(prompt) << ',' << SanitizeCSV(text) << '\n';
     }
 }
 
 void SetVLMResultFile(const std::string &path)
 {
-    std::lock_guard<std::mutex> lk(g_resMutex);
-    g_resFile.reset();
-    g_headerWritten = false;
+    ResultState& st = GetResultState();
+    ResultLockGuard lk(st.mutex);
+    st.file.reset();
+    st.headerWritten = false;
     auto f = std::make_unique<std::ofstream>(path, std::ios::app);
     if (!f->is_open())
     {
         std::cerr << "[VLM] Failed to open result file: " << path << std::endl;
         return;
     }
-    g_resFile = std::move(f);
+    st.file = std::move(f);
     DBG_LOG(std::string("[VLM] Result output -> ") + path);
 }
 
 void SetVLMResultFileW(const std::wstring &wpath)
 {
-    std::lock_guard<std::mutex> lk(g_resMutex);
-    g_resFile.reset();
-    g_headerWritten = false;
+    ResultState& st = GetResultState();
+    ResultLockGuard lk(st.mutex);
+    st.file.reset();
+    st.headerWritten = false;
     std::filesystem::path p(wpath);
     auto f = std::make_unique<std::ofstream>(p, std::ios::app | std::ios::binary);
     if (!f->is_open()) {
         std::wcerr << L"[VLM] Failed to open result file: " << wpath << std::endl;
         return;
     }
-    g_resFile = std::move(f);
+    st.file = std::move(f);
     // Log using UTF-8 conversion for consistency with existing debug system
     DBG_LOG(std::string("[VLM] Result output -> ") + WideToUtf8(wpath));
 }
 
 void SetVLMInputFile(const std::string &inputFile)
 {
-    std::lock_guard<std::mutex> lk(g_resMutex);
-    g_inputFileName = inputFile;
+    ResultState& st = GetResultState();
+    ResultLockGuard lk(st.mutex);
+    st.inputFileName = inputFile;
 }
 
 ov::Tensor ConvertD3DTextureToOVTensorCPU(

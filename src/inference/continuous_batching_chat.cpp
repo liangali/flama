@@ -8,6 +8,9 @@
 #include <random>
 #include <stdexcept>
 #include <thread>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include <mutex>
 #include <atomic>
 
@@ -179,7 +182,7 @@ void GenerationInfoCollector::add_generation(ov::genai::ContinuousBatchingPipeli
         // sampling_params.assistant_confidence_threshold = 0.4f; // dynamic speculative decoding
     }
     ov::genai::GenerationHandle generation_handle = pipe->add_request(request_id, dataset->m_prompts[request_id], sampling_params);
-    std::lock_guard<std::mutex> lock(mutex);
+    CBLockGuard lock(mutex);
     generations_info.emplace_back(std::move(generation_handle), dataset->m_input_lens[request_id]);
 }
 void GenerationInfoCollector::add_generation(ov::genai::ContinuousBatchingPipeline* pipe, size_t request_id,
@@ -194,27 +197,27 @@ void GenerationInfoCollector::add_generation(ov::genai::ContinuousBatchingPipeli
     //    // sampling_params.assistant_confidence_threshold = 0.4f; // dynamic speculative decoding
     //}
     ov::genai::GenerationHandle generation_handle = pipe->add_request(request_id, prompt, sampling_params);
-    std::lock_guard<std::mutex> lock(mutex);
+    CBLockGuard lock(mutex);
     generations_info.emplace_back(std::move(generation_handle), 0);
 }
 void GenerationInfoCollector::add_generation(ov::genai::ContinuousBatchingPipeline *pipe, size_t request_id,
     std::string prompt, std::vector<ov::Tensor>& images, ov::genai::GenerationConfig sampling_params,bool is_speculative_decoding_enabled)
 {
     ov::genai::GenerationHandle generation_handle = pipe->add_request(request_id, prompt, images, sampling_params);
-    std::lock_guard<std::mutex> lock(mutex);
+    CBLockGuard lock(mutex);
     generations_info.emplace_back(std::move(generation_handle), 0);
 }
 void GenerationInfoCollector::add_generation(ov::genai::ContinuousBatchingPipeline* pipe, size_t request_id,
     std::string prompt, std::vector<ov::Tensor>& images, std::vector<ov::Tensor>& videos, ov::genai::GenerationConfig sampling_params, bool is_speculative_decoding_enabled)
 {
     ov::genai::GenerationHandle generation_handle = pipe->add_request(request_id, prompt, images, videos, sampling_params);
-    std::lock_guard<std::mutex> lock(mutex);
+    CBLockGuard lock(mutex);
     generations_info.emplace_back(std::move(generation_handle), 0);
 }
 
 size_t GenerationInfoCollector::run()
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    CBLockGuard lock(mutex);
     for (GenerationInfo &generation_info : generations_info)
     {
         if (!generation_info.is_active())
@@ -236,7 +239,7 @@ size_t GenerationInfoCollector::run()
 
 bool GenerationInfoCollector::isCompleted()
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    CBLockGuard lock(mutex);
     return num_finished == generations_info.size();
 }
 void GenerationInfoCollector::print_statistics()

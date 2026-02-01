@@ -68,8 +68,57 @@ static bool cb_threads_started = false;
 static std::thread g_cbProcThread;
 static bool new_cb_proc_running = false;
 static std::atomic<bool> g_cb_stop{false};
+#ifdef _WIN32
+struct CbSync
+{
+    SRWLOCK lock;
+    CONDITION_VARIABLE cv;
+    CbSync()
+    {
+        InitializeSRWLock(&lock);
+        InitializeConditionVariable(&cv);
+    }
+};
+static CbSync& GetCbSync()
+{
+    static INIT_ONCE once = INIT_ONCE_STATIC_INIT;
+    PVOID ctx = nullptr;
+    InitOnceExecuteOnce(
+        &once,
+        [](PINIT_ONCE, PVOID, PVOID* context) -> BOOL
+        {
+            *context = new CbSync();
+            return TRUE;
+        },
+        nullptr,
+        &ctx);
+    return *static_cast<CbSync*>(ctx);
+}
+static void CbLock() { AcquireSRWLockExclusive(&GetCbSync().lock); }
+static void CbUnlock() { ReleaseSRWLockExclusive(&GetCbSync().lock); }
+static void CbNotifyAll() { WakeAllConditionVariable(&GetCbSync().cv); }
+template <typename Pred>
+static void CbWait(Pred pred)
+{
+    while (!pred())
+    {
+        SleepConditionVariableSRW(&GetCbSync().cv, &GetCbSync().lock, INFINITE, 0);
+    }
+}
+#else
 static std::mutex g_cb_mutex;
 static std::condition_variable g_cb_cv;
+static void CbLock() { g_cb_mutex.lock(); }
+static void CbUnlock() { g_cb_mutex.unlock(); }
+static void CbNotifyAll() { g_cb_cv.notify_all(); }
+template <typename Pred>
+static void CbWait(Pred pred)
+{
+    std::unique_lock<std::mutex> lk(g_cb_mutex, std::adopt_lock);
+    g_cb_cv.wait(lk, pred);
+    lk.release();
+}
+#endif
 static int g_cb_pending_batches = 0;
 static int g_cb_enqueued_batches = 0;
 static bool use_cb = false;
@@ -413,13 +462,16 @@ static void StartNewCBProcThreadIfEnabled() {
         auto& generation_info_collector = GetCachedGenerationInfoCollector();
         generation_info_collector.set_start_time(std::chrono::steady_clock::now());
         while (true) {
-            std::unique_lock<std::mutex> lk(g_cb_mutex);
-            g_cb_cv.wait(lk, []() { return g_cb_stop.load() || (g_cb_pending_batches > g_cb_enqueued_batches); });
-            if (g_cb_stop.load() && !(g_cb_pending_batches > g_cb_enqueued_batches)) break;
+            CbLock();
+            CbWait([]() { return g_cb_stop.load() || (g_cb_pending_batches > g_cb_enqueued_batches); });
+            if (g_cb_stop.load() && !(g_cb_pending_batches > g_cb_enqueued_batches)) {
+                CbUnlock();
+                break;
+            }
             // copy and clear current queued requests under lock
             std::vector<CBInferenceParams> local_queue;
             local_queue.swap(g_cbInferenceQueue);
-            lk.unlock();
+            CbUnlock();
 
             // mark CB start timer once
             if (cb_timer) {
@@ -436,11 +488,10 @@ static void StartNewCBProcThreadIfEnabled() {
                 ++req_i;
             }
             // signal decode thread that add_generation is complete for this batch
-            {
-                std::lock_guard<std::mutex> lk2(g_cb_mutex);
-                g_cb_enqueued_batches = g_cb_pending_batches;
-            }
-            g_cb_cv.notify_all();
+            CbLock();
+            g_cb_enqueued_batches = g_cb_pending_batches;
+            CbUnlock();
+            CbNotifyAll();
 
             // step pipeline until all finished for current set
             while (pipe.has_non_finished_requests()) {
@@ -470,7 +521,7 @@ static void StartNewCBProcThreadIfEnabled() {
 static void StopNewCBProcThreadIfEnabled() {
     if (!new_cb_proc_running) return;
     g_cb_stop.store(true);
-    g_cb_cv.notify_all();
+    CbNotifyAll();
     if (g_cbProcThread.joinable()) g_cbProcThread.join();
     new_cb_proc_running = false;
 	g_hw_cb_multi_end = std::chrono::steady_clock::now();
@@ -757,17 +808,15 @@ static void RunBatchHW(/*bool use_cb*/)
                 else if (g_commonConfig.new_multithread) {
                     StartNewCBProcThreadIfEnabled();
                     // signal worker there's a pending batch and wait until enqueued
-                    {
-                        std::lock_guard<std::mutex> lk(g_cb_mutex);
-                        g_cb_pending_batches++;
-                    }
-                    g_cb_cv.notify_all();
-                    {
-                        std::unique_lock<std::mutex> lk(g_cb_mutex);
-                        std::cout << "wait for g_cb_enqueued_batches >= g_cb_pending_batches" << std::endl;
-                        g_cb_cv.wait(lk, [](){ return g_cb_enqueued_batches >= g_cb_pending_batches; });
-                        std::cout << "decode continue as g_cb_enqueued_batches >= g_cb_pending_batches" << std::endl;
-                    }
+                    CbLock();
+                    g_cb_pending_batches++;
+                    CbUnlock();
+                    CbNotifyAll();
+                    CbLock();
+                    std::cout << "wait for g_cb_enqueued_batches >= g_cb_pending_batches" << std::endl;
+                    CbWait([](){ return g_cb_enqueued_batches >= g_cb_pending_batches; });
+                    std::cout << "decode continue as g_cb_enqueued_batches >= g_cb_pending_batches" << std::endl;
+                    CbUnlock();
                 }
                 else { ProcessCBQueueAndReport(); }
             }
@@ -1882,15 +1931,13 @@ void decode_frames(AVFormatContext *format_context,
         else if (g_commonConfig.new_multithread) {
             // Start worker and signal final pending batch (if any)
             StartNewCBProcThreadIfEnabled();
-            {
-                std::lock_guard<std::mutex> lk(g_cb_mutex);
-                g_cb_pending_batches++;
-            }
-            g_cb_cv.notify_all();
-            {
-                std::unique_lock<std::mutex> lk(g_cb_mutex);
-                g_cb_cv.wait(lk, [](){ return g_cb_enqueued_batches >= g_cb_pending_batches; });
-            }
+            CbLock();
+            g_cb_pending_batches++;
+            CbUnlock();
+            CbNotifyAll();
+            CbLock();
+            CbWait([](){ return g_cb_enqueued_batches >= g_cb_pending_batches; });
+            CbUnlock();
             StopNewCBProcThreadIfEnabled();
         }
         else { ProcessCBQueueAndReport(); }

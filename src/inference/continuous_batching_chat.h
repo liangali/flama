@@ -5,7 +5,11 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <mutex>
+#endif
 #include <atomic>
 
 #include <openvino/genai/continuous_batching_pipeline.hpp>
@@ -14,6 +18,24 @@
 //#include "parse_options.h"
 
 namespace CBPipeline {
+
+#ifdef _WIN32
+struct CBMutex {
+    SRWLOCK lock;
+    CBMutex() { InitializeSRWLock(&lock); }
+};
+struct CBLockGuard {
+    explicit CBLockGuard(CBMutex& m) : mutex(&m) { AcquireSRWLockExclusive(&mutex->lock); }
+    ~CBLockGuard() { ReleaseSRWLockExclusive(&mutex->lock); }
+    CBLockGuard(const CBLockGuard&) = delete;
+    CBLockGuard& operator=(const CBLockGuard&) = delete;
+private:
+    CBMutex* mutex;
+};
+#else
+using CBMutex = std::mutex;
+using CBLockGuard = std::lock_guard<CBMutex>;
+#endif
 class AutoStartTimer {
     const decltype(std::chrono::steady_clock::now()) m_start;
 public:
@@ -110,7 +132,7 @@ public:
     void print_statistics();
     bool isCompleted();
 
-    std::mutex mutex;
+    CBMutex mutex;
     std::vector<GenerationInfo> generations_info;
     size_t num_finished = 0;
     std::chrono::steady_clock::time_point start_time;
