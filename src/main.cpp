@@ -303,6 +303,12 @@ struct CBInferenceParams {
     std::string prompt;
     std::vector<ov::Tensor> tensors;
     ov::genai::GenerationConfig sampling_params;
+    uint64_t windowDecoded = 0;
+    uint64_t windowSelected = 0;
+    uint64_t decode_total_us = 0;
+    uint64_t scale_total_us = 0;
+    uint64_t tensor_total_us = 0;
+    uint64_t pipeline_us = 0;
 };
 static std::vector<CBInferenceParams> g_cbInferenceQueue;
 
@@ -500,8 +506,10 @@ static void StartNewCBProcThreadIfEnabled() {
 
             // report results
             g_hw_cb_end = std::chrono::steady_clock::now();
-            g_hw_inference_total_us += std::chrono::duration_cast<std::chrono::microseconds>(g_hw_cb_end - g_hw_cb_start).count();
+            const uint64_t cb_inference_us = std::chrono::duration_cast<std::chrono::microseconds>(g_hw_cb_end - g_hw_cb_start).count();
+            g_hw_inference_total_us += cb_inference_us;
             auto tokenizer = pipe.get_tokenizer();
+            size_t i = 0;
             for (auto& generation_info : generation_info_collector.generations_info) {
                 auto outputs = generation_info.generation_handle->read_all();
                 std::string combined;
@@ -512,6 +520,21 @@ static void StartNewCBProcThreadIfEnabled() {
                     combined += text;
                 }
                 DBG_LOG(std::string("[rslt_cb new-mt]") + combined);
+                if (i < local_queue.size())
+                {
+                    const auto& req = local_queue[i];
+                    prof::BatchAggregator::Get().RecordBatch(
+                        req.windowDecoded,
+                        req.windowSelected,
+                        req.decode_total_us,
+                        req.scale_total_us,
+                        req.tensor_total_us,
+                        cb_inference_us,
+                        req.pipeline_us,
+                        req.prompt,
+                        combined);
+                }
+                ++i;
             }
             generation_info_collector.generations_info.clear();
         }
@@ -702,7 +725,8 @@ static void ProcessCBQueueAndReport()
     std::cout << "current CB total time: " << std::chrono::duration_cast<std::chrono::milliseconds>(cb_end - cb_start).count() << " ms" << std::endl;
     g_hw_inference_total_us += std::chrono::duration_cast<std::chrono::microseconds>(cb_end - cb_start).count();
     auto tokenizer = pipe.get_tokenizer();
-   // int i = 0;
+    const uint64_t cb_inference_us = std::chrono::duration_cast<std::chrono::microseconds>(cb_end - cb_start).count();
+    size_t i = 0;
     for (auto& generation_info : generation_info_collector.generations_info)
     {
         report_idx++;
@@ -717,6 +741,21 @@ static void ProcessCBQueueAndReport()
             combined += text;
         }
         DBG_LOG(std::string("[rslt_cb of batch NO. ") + std::to_string(report_idx) + ":]\n " + combined);
+        if (i < g_cbInferenceQueue.size())
+        {
+            const auto& req = g_cbInferenceQueue[i];
+            prof::BatchAggregator::Get().RecordBatch(
+                req.windowDecoded,
+                req.windowSelected,
+                req.decode_total_us,
+                req.scale_total_us,
+                req.tensor_total_us,
+                cb_inference_us,
+                req.pipeline_us,
+                req.prompt,
+                combined);
+        }
+        ++i;
         
     }
     // Release queued CB inference params now that processing is complete
@@ -784,6 +823,12 @@ static void RunBatchHW(/*bool use_cb*/)
                     params.prompt = prompt;
                     params.tensors = std::move(tensors);
                     params.sampling_params = sampling_params;
+                    params.windowDecoded = bs.windowDecoded;
+                    params.windowSelected = bs.windowSelected;
+                    params.decode_total_us = bs.decode_total_us;
+                    params.scale_total_us = bs.scale_total_us;
+                    params.tensor_total_us = bs.tensor_total_us;
+                    params.pipeline_us = bs.pipeline_us;
                     g_cbInferenceQueue.push_back(std::move(params));
                 }
                 else
@@ -1710,15 +1755,24 @@ void decode_frames(AVFormatContext *format_context,
                                         trigger = true;
                                     if (trigger)
                                     {
-                                        
-                                        RunBatchHW(/*use_cb*/);
-                                        
-                                        auto pipeline_end_us = std::chrono::steady_clock::now();
-                                        g_batchState.pipeline_us = std::chrono::duration_cast<std::chrono::microseconds>(pipeline_end_us - pipeline_start_us).count();
-                                        prof::BatchAggregator::Get().RecordBatch(g_batchState.windowDecoded, g_batchState.windowSelected, g_batchState.decode_total_us, g_batchState.scale_total_us, g_batchState.tensor_total_us, g_batchState.inference_us, g_batchState.pipeline_us, g_batchState.prompt, g_batchState.result);
-                                        DBG_LOGF("[Batch] idx=%llu frames=%zu decode_window=%llu selected_window=%llu scale_us=%llu tensor_us=%llu infer_us=%llu", (unsigned long long)g_batchState.batchIndex, g_batchState.cached_textures.size(), (unsigned long long)g_batchState.windowDecoded, (unsigned long long)g_batchState.windowSelected, (unsigned long long)g_batchState.scale_total_us, (unsigned long long)g_batchState.tensor_total_us, (unsigned long long)g_batchState.inference_us);
-                                        g_batchState.reset();
-                                        pipeline_start_us = std::chrono::steady_clock::now();
+                                        if (g_commonConfig.use_cb)
+                                        {
+                                            auto pipeline_end_us = std::chrono::steady_clock::now();
+                                            g_batchState.pipeline_us = std::chrono::duration_cast<std::chrono::microseconds>(pipeline_end_us - pipeline_start_us).count();
+                                            RunBatchHW(/*use_cb*/);
+                                            g_batchState.reset();
+                                            pipeline_start_us = std::chrono::steady_clock::now();
+                                        }
+                                        else
+                                        {
+                                            RunBatchHW(/*use_cb*/);
+                                            auto pipeline_end_us = std::chrono::steady_clock::now();
+                                            g_batchState.pipeline_us = std::chrono::duration_cast<std::chrono::microseconds>(pipeline_end_us - pipeline_start_us).count();
+                                            prof::BatchAggregator::Get().RecordBatch(g_batchState.windowDecoded, g_batchState.windowSelected, g_batchState.decode_total_us, g_batchState.scale_total_us, g_batchState.tensor_total_us, g_batchState.inference_us, g_batchState.pipeline_us, g_batchState.prompt, g_batchState.result);
+                                            DBG_LOGF("[Batch] idx=%llu frames=%zu decode_window=%llu selected_window=%llu scale_us=%llu tensor_us=%llu infer_us=%llu", (unsigned long long)g_batchState.batchIndex, g_batchState.cached_textures.size(), (unsigned long long)g_batchState.windowDecoded, (unsigned long long)g_batchState.windowSelected, (unsigned long long)g_batchState.scale_total_us, (unsigned long long)g_batchState.tensor_total_us, (unsigned long long)g_batchState.inference_us);
+                                            g_batchState.reset();
+                                            pipeline_start_us = std::chrono::steady_clock::now();
+                                        }
                                     }
                                     // End pipeline early (no per-frame inference timings)
                                     frameProfiler.MarkStageEnd(prof::Stage::Pipeline);
