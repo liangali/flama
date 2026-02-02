@@ -162,34 +162,19 @@ cd D:\code\flama_code\flama\build\bin\Release
 ### Command-Line Options
 
 ```powershell
-# Basic syntax
-flama.exe <input_video> <hw|sw> [output_dir] [options]
+# Basic syntax (all args use --name=value)
+flama.exe --input=PATH --mode=hw|sw [--out_dir=PATH]
+flama.exe --video_dir=PATH --mode=hw|sw [--out_dir=PATH]
 
-# Frame selection options
---sel-policy=<policy>        # frame, time, mixed, key, mixed-key
---frame-interval=60          # Sample every N frames
---window-seconds=1.0         # Time window in seconds
---max-per-window=2           # Max frames per window
---min-frames-between=0       # Min frame interval
---no-force-keyframe          # Don't force keyframe selection
-
-# Batch processing options
---batch-trigger=10           # Batch size trigger
---max-cache=128              # Max cache size
---new-batch-mode             # Use new batch mode
-
-# Continuous batching options
---use_cb                     # Enable continuous batching
---cb_batch_size=10           # CB batch size
---cb-multi-thread            # Enable CB multi-threading
---new-multithread            # Use new multi-thread mode
-
-# Scheduler options
---max_num_seqs=64            # Max sequences
---dynamic_split_fuse=false   # Dynamic split/fuse
-
-# Debug options
---debug, -d                  # Enable debug mode
+# Core options
+--input=PATH           # Input video file path
+--video_dir=PATH       # Directory of video files (sorted by filename)
+--mode=hw|sw           # Decode path: hw (D3D11) or sw
+--out_dir=PATH         # Output directory for CSV logs
+--config=PATH          # JSON config path (default: exe_dir/config.json)
+--json_file=PATH       # Output JSON file for VLM results (default: ./output_vlm.json)
+--prompt=TEXT          # Override VLM prompt for video batches
+--debug=0|1            # Enable debug logging
 ```
 
 ### Using JSON Configuration
@@ -208,30 +193,6 @@ copy ..\config\example_config.json ..\config\my_config.json
 
 ## Usage Examples
 
-### Example 1: Hardware Decode with Frame Interval
-
 ```powershell
-.\flama.exe "D:\videos\sample.mp4" hw --frame-interval=30 --sel-policy=frame
-```
-
-### Example 2: Continuous Batching Mode
-
-```powershell
-.\flama.exe "D:\videos\sample.mp4" hw --use_cb --cb_batch_size=10 --new-multithread
-```
-
-### Example 3: Mixed Frame Selection Strategy
-
-```powershell
-.\flama.exe "D:\videos\sample.mp4" hw `
-  --sel-policy=mixed `
-  --frame-interval=30 `
-  --window-seconds=2.0 `
-  --max-per-window=3
-```
-
-### Example 4: Using JSON Config
-
-```powershell
-.\flama.exe "D:\videos\sample.mp4" hw --config=..\config\my_config.json
+flama.exe --input=D:\data\videoclips\phone2\007_input\test(00).mp4 --mode=hw
 ```
