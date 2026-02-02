@@ -72,7 +72,6 @@ struct CommonCfg {
     std::optional<bool> cb_multi_thread; // "cb-multi-thread" in JSON
     std::optional<bool> new_multithread; // "new_multithread" in JSON
     std::optional<std::string> input;
-    std::optional<std::string> out_dir;
     std::optional<int> batch_trigger;
     std::optional<int> cb_batch_size;
     // Optional VPP downscaling size

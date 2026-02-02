@@ -7,7 +7,6 @@ struct DemoConfig;
 struct ParsedArgs {
     std::string input;
     std::string mode; // hw | sw
-    std::string outDir;
     std::string configPath; // path to JSON config for CB pipeline
     std::string prompt; // VLM prompt override
     std::string videoDir; // directory with multiple videos
@@ -21,7 +20,6 @@ ParsedArgs parseArgs(int argc, char* argv[]);
 struct ParsedArgsW {
     std::wstring input;
     std::wstring mode; // hw | sw
-    std::wstring outDir;
     std::wstring configPath; // path to JSON config for CB pipeline
     std::wstring prompt; // VLM prompt override
     std::wstring videoDir; // directory with multiple videos

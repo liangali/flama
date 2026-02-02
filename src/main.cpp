@@ -190,13 +190,12 @@ static void LogBatchConfig(const BatchConfig& c)
 
 static void LogCommonConfig(const CommonConfig& c)
 {
-    DBG_LOGF("[CommonConfig] debug=%d use_cb=%d cb_multi_thread=%d new_multithread=%d hw_decode=%d log_path=%s input_video_path=%s vpp_down=%dx%d",
+    DBG_LOGF("[CommonConfig] debug=%d use_cb=%d cb_multi_thread=%d new_multithread=%d hw_decode=%d input_video_path=%s vpp_down=%dx%d",
         c.debug ? 1 : 0,
         c.use_cb ? 1 : 0,
         c.cb_multi_thread ? 1 : 0,
         c.new_multithread ? 1 : 0,
         c.hw_decode ? 1 : 0,
-        c.log_path.c_str(),
         c.input_video_path.c_str(),
         c.vpp_down_width,
         c.vpp_down_height);
@@ -2294,7 +2293,6 @@ int main(int argc, char *argv[])
     // Apply CLI overrides into globals immediately after parsing
 	if (!pa.input.empty()) g_commonConfig.input_video_path = pa.input;
 	if (!pa.mode.empty())  g_commonConfig.hw_decode = (pa.mode == "hw" || pa.mode == "HW");
-    if (!pa.outDir.empty()) g_commonConfig.log_path = pa.outDir;
     // Re-apply to globals so overrides propagate consistently
     // ApplyConfig(cfg);
     DBG_LOG(std::string("[Main] DebugMode=") + (IsDebugMode() ? "ON" : "OFF"));
@@ -2312,17 +2310,6 @@ int main(int argc, char *argv[])
     std::cout << "Log g_fsConfig/g_batchConfig/g_commonConfig/g_vlmConfig end" << std::endl;
     g_vlmJsonCollector.Reset();
     // Compose runtime params from cfg (already overridden by CLI)
-    std::string outDir = g_commonConfig.log_path;
-#ifdef _WIN32
-    // Preserve a wide outDir for output file construction
-    std::wstring outDirW;
-    if (!paw.outDir.empty())
-        outDirW = paw.outDir;
-    else if (!pa.outDir.empty())
-        outDirW = Utf8ToWide(pa.outDir);
-    else
-        outDirW = Utf8ToWide(outDir);
-#endif
    // bool useSoftware = (mode == "sw" || mode == "SW");
    // bool useHardware = (mode == "hw" || mode == "HW");
     bool useHardware = g_commonConfig.hw_decode;
@@ -2331,20 +2318,6 @@ int main(int argc, char *argv[])
     use_cb = g_vlmConfig.enable_continuous_batching && g_commonConfig.use_cb;
     cb_batch_size = g_batchConfig.cb_batch_size;
     DBG_LOGF(" use_cb=%d cb_batch_size=%d, useHardware = %d, useSoftware = %d", use_cb ? 1 : 0, cb_batch_size, useHardware, useSoftware);
-
-    // Ensure output directory exists
-    try
-    {
-#ifdef _WIN32
-        std::filesystem::create_directories(std::filesystem::path(outDirW.empty() ? Utf8ToWide(outDir) : outDirW));
-#else
-        std::filesystem::create_directories(outDir);
-#endif
-    }
-    catch (const std::exception &e)
-    {
-        std::cerr << "[PROF] Failed to create output directory '" << outDir << "': " << e.what() << std::endl;
-    }
 
     const char *hw_device_type = "d3d11va"; // Default hardware decoding type
 
@@ -2488,15 +2461,16 @@ int main(int argc, char *argv[])
         // Use input clip name as prefix for dump files
         std::string clipName = inputPath.stem().string();
 #ifdef _WIN32
+        std::filesystem::path outBaseW = std::filesystem::current_path();
         std::wstring filename_w = ExtractFilenameWithoutExt(inputPathW);
-        std::filesystem::path outBaseW = std::filesystem::path(outDirW.empty() ? Utf8ToWide(outDir) : outDirW);
         std::filesystem::path profPathW = outBaseW / (filename_w + L"_profile_" + (useSoftware ? L"sw" : L"hw") + L".csv");
         std::filesystem::path resultPathW = outBaseW / (filename_w + L"_results_" + (useSoftware ? L"sw" : L"hw") + L".csv");
         std::filesystem::path batchPathW = outBaseW / (filename_w + L"_batch_" + (useSoftware ? L"sw" : L"hw") + L".csv");
 #else
-        std::string profFile = outDir + std::string("/") + clipName + std::string("_profile_") + (useSoftware ? "sw" : "hw") + ".csv";
-        std::string resultFile = outDir + std::string("/") + clipName + std::string("_results_") + (useSoftware ? "sw" : "hw") + ".csv";
-        std::string batchFile = outDir + std::string("/") + clipName + std::string("_batch_") + (useSoftware ? "sw" : "hw") + ".csv";
+        std::filesystem::path outBase = std::filesystem::current_path();
+        std::string profFile = (outBase / (clipName + std::string("_profile_") + (useSoftware ? "sw" : "hw") + ".csv")).string();
+        std::string resultFile = (outBase / (clipName + std::string("_results_") + (useSoftware ? "sw" : "hw") + ".csv")).string();
+        std::string batchFile = (outBase / (clipName + std::string("_batch_") + (useSoftware ? "sw" : "hw") + ".csv")).string();
 #endif
 
         // Recompute output file names to include clip dimensions and codec info
@@ -2509,23 +2483,29 @@ int main(int argc, char *argv[])
             batchPathW = outBaseW / ((filename_w + suffix + L"_batch_" + (useSoftware ? L"sw" : L"hw")) + L".csv");
 #else
             std::string suffix = std::string("_") + WideToUtf8(codecSimple) + "_" + std::to_string(srcW) + "x" + std::to_string(srcH);
-            profFile = outDir + std::string("/") + clipName + suffix + std::string("_profile_") + (useSoftware ? "sw" : "hw") + ".csv";
-            resultFile = outDir + std::string("/") + clipName + suffix + std::string("_results_") + (useSoftware ? "sw" : "hw") + ".csv";
-            batchFile = outDir + std::string("/") + clipName + suffix + std::string("_batch_") + (useSoftware ? "sw" : "hw") + ".csv";
+            profFile = (outBase / (clipName + suffix + std::string("_profile_") + (useSoftware ? "sw" : "hw") + ".csv")).string();
+            resultFile = (outBase / (clipName + suffix + std::string("_results_") + (useSoftware ? "sw" : "hw") + ".csv")).string();
+            batchFile = (outBase / (clipName + suffix + std::string("_batch_") + (useSoftware ? "sw" : "hw") + ".csv")).string();
 #endif
         }
 #ifdef _WIN32
-        prof::FrameProfiler::SetOutputFileW(profPathW.wstring());
-        DBG_LOG(std::string("[PROF] Output -> ") + WideToUtf8(profPathW.wstring()));
         SetVLMResultFileW(resultPathW.wstring());
-        prof::BatchAggregator::Get().SetOutputFileW(batchPathW.wstring());
-        DBG_LOG(std::string("[BATCH] Output -> ") + WideToUtf8(batchPathW.wstring()));
+        if (g_commonConfig.debug)
+        {
+            prof::FrameProfiler::SetOutputFileW(profPathW.wstring());
+            DBG_LOG(std::string("[PROF] Output -> ") + WideToUtf8(profPathW.wstring()));
+            prof::BatchAggregator::Get().SetOutputFileW(batchPathW.wstring());
+            DBG_LOG(std::string("[BATCH] Output -> ") + WideToUtf8(batchPathW.wstring()));
+        }
 #else
-        prof::FrameProfiler::SetOutputFile(profFile);
-        DBG_LOG(std::string("[PROF] Output -> ") + profFile);
         SetVLMResultFile(resultFile);
-        prof::BatchAggregator::Get().SetOutputFile(batchFile);
-        DBG_LOG(std::string("[BATCH] Output -> ") + batchFile);
+        if (g_commonConfig.debug)
+        {
+            prof::FrameProfiler::SetOutputFile(profFile);
+            DBG_LOG(std::string("[PROF] Output -> ") + profFile);
+            prof::BatchAggregator::Get().SetOutputFile(batchFile);
+            DBG_LOG(std::string("[BATCH] Output -> ") + batchFile);
+        }
 #endif
 
         AVCodecContext *codec_context = nullptr;

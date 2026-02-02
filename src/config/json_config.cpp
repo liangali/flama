@@ -215,7 +215,7 @@ void ApplyConfig(const DemoConfig& cfg) {
     if (cfg.commonCfg.vpp_height) {
         g_commonConfig.vpp_down_height = std::max(0, *cfg.commonCfg.vpp_height);
     }
-    // mode/input/out_dir defaults should be handled by caller (main) when composing ParsedArgs
+    // mode/input defaults should be handled by caller (main) when composing ParsedArgs
 }
 
 // ----------------------- Debug dump helpers -----------------------
@@ -284,7 +284,6 @@ void LogDemoConfig(const DemoConfig& cfg) {
         "mode=" + OptToStr(cfg.commonCfg.mode) +
         ", debug=" + OptToStr(cfg.commonCfg.debug) +
         ", input=" + OptToStr(cfg.commonCfg.input) +
-        ", out_dir=" + OptToStr(cfg.commonCfg.out_dir) +
         ", batch_trigger=" + OptToStr(cfg.commonCfg.batch_trigger) +
         ", cb_batch_size=" + OptToStr(cfg.commonCfg.cb_batch_size) +
         ", cb_multi_thread=" + OptToStr(cfg.commonCfg.cb_multi_thread) +

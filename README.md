@@ -163,18 +163,17 @@ cd D:\code\flama_code\flama\build\bin\Release
 
 ```powershell
 # Basic syntax (all args use --name=value)
-flama.exe --input=PATH --mode=hw|sw [--out_dir=PATH]
-flama.exe --video_dir=PATH --mode=hw|sw [--out_dir=PATH]
+flama.exe --input=PATH --mode=hw|sw
+flama.exe --video_dir=PATH --mode=hw|sw
 
 # Core options
 --input=PATH           # Input video file path
 --video_dir=PATH       # Directory of video files (sorted by filename)
 --mode=hw|sw           # Decode path: hw (D3D11) or sw
---out_dir=PATH         # Output directory for CSV logs
 --config=PATH          # JSON config path (default: exe_dir/config.json)
 --json_file=PATH       # Output JSON file for VLM results (default: ./output_vlm.json)
 --prompt=TEXT          # Override VLM prompt for video batches
---debug=0|1            # Enable debug logging
+--debug=0|1            # Enable debug logging (default: 0)
 ```
 
 ### Using JSON Configuration

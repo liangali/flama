@@ -116,9 +116,6 @@ ParsedArgs parseArgs(int argc, char* argv[]) {
         else if (key == "mode") {
             pa.mode = val;
         }
-        else if (key == "out_dir") {
-            pa.outDir = val;
-        }
         else if (key == "config") {
             pa.configPath = val;
         }
@@ -136,9 +133,6 @@ ParsedArgs parseArgs(int argc, char* argv[]) {
             pa.prompt = val;
             if (!pa.prompt.empty()) g_commonConfig.prompt_video = pa.prompt;
         }
-    }
-    if (pa.outDir.empty()) {
-        pa.outDir = ".";
     }
     pa.ok = (!pa.mode.empty() && (!pa.input.empty() || !pa.videoDir.empty()));
     return pa;
@@ -158,9 +152,6 @@ ParsedArgsW parseArgsW(int argc, wchar_t* argv[]) {
         else if (key == L"mode") {
             pa.mode = val;
         }
-        else if (key == L"out_dir") {
-            pa.outDir = val;
-        }
         else if (key == L"config") {
             pa.configPath = val;
         }
@@ -179,9 +170,6 @@ ParsedArgsW parseArgsW(int argc, wchar_t* argv[]) {
             if (!pa.prompt.empty()) g_commonConfig.prompt_video = WideToUtf8(pa.prompt);
         }
     }
-    if (pa.outDir.empty()) {
-        pa.outDir = L".";
-    }
     pa.ok = (!pa.mode.empty() && (!pa.input.empty() || !pa.videoDir.empty()));
     return pa;
 }
@@ -191,21 +179,18 @@ void PrintHelp(const char* exeName)
     const char* exe = exeName ? exeName : "flama";
     std::cout
         << "Usage:\n"
-        << "  " << exe << " --input=PATH --mode=hw|sw [--out_dir=PATH]\n"
-        << "  " << exe << " --video_dir=PATH --mode=hw|sw [--out_dir=PATH]\n"
+        << "  " << exe << " --input=PATH --mode=hw|sw\n"
+        << "  " << exe << " --video_dir=PATH --mode=hw|sw\n"
         << "\n"
         << "All arguments use --name=value format only.\n"
         << "\n"
         << "  --input=PATH           Input video file path.\n"
         << "  --video_dir=PATH       Directory of video files (sorted by filename).\n"
         << "  --mode=hw|sw           Decode path: hw (D3D11) or sw.\n"
-        << "  --out_dir=PATH         Output directory for CSV logs.\n"
         << "  --config=PATH          JSON config path (default: exe_dir/config.json).\n"
         << "  --json_file=PATH       Output JSON file for VLM results (default: ./output_vlm.json).\n"
         << "  --prompt=TEXT          Override VLM prompt for video batches.\n"
-        << "  --debug=0|1            Enable debug logging.\n"
-
-        << "  --help=1               Print this help message.\n"
+        << "  --debug=0|1            Enable debug logging (default: 0).\n"
         << "  --help | -h | /?       Print this help message.\n";
 }
 
@@ -257,7 +242,6 @@ bool ParseCommandLineAndLoadConfig(int argc,
             pa.input = WideToUtf8(paw.input);
             pa.mode = WideToUtf8(paw.mode);
             pa.prompt = WideToUtf8(paw.prompt);
-            pa.outDir = WideToUtf8(paw.outDir);
             pa.configPath = WideToUtf8(paw.configPath);
             pa.videoDir = WideToUtf8(paw.videoDir);
             pa.jsonFile = WideToUtf8(paw.jsonFile);
@@ -306,9 +290,6 @@ bool FinalizeParsedArgs(ParsedArgs& pa,
         }
         if (cfg.commonCfg.input && pa.input.empty() && !hasVideoDir) {
             pa.input = cfg.commonCfg.input.value();
-        }
-        if (cfg.commonCfg.out_dir) {
-            pa.outDir = cfg.commonCfg.out_dir.value();
         }
         pa.ok = (!pa.mode.empty() && (!pa.input.empty() || hasVideoDir));
     }
