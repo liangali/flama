@@ -144,7 +144,6 @@ ParsedArgs parseArgs(int argc, char* argv[]) {
     return pa;
 }
 
-// ���ַ�����ʵ��
 ParsedArgsW parseArgsW(int argc, wchar_t* argv[]) {
     ParsedArgsW pa;
     for (int i = 1; i < argc; ++i) {
@@ -320,4 +319,3 @@ bool FinalizeParsedArgs(ParsedArgs& pa,
     }
     return true;
 }
-

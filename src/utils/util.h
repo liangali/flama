@@ -123,55 +123,48 @@ mfxStatus WriteRawFrame(mfxFrameSurface1 *surface, std::ofstream &f);
 mfxStatus ReadRawFrame(FrameInfo fi, mfxU8 *bs, std::ifstream &f);
 mfxStatus ReadRawFrame(mfxFrameSurface1 *surface, std::ifstream &f);
 bool CheckKB_Quit(void);
-// ����ת������
+
 std::string WideToUtf8(const std::wstring& ws);
 std::wstring Utf8ToWide(const std::string& s);
 enum class FSPolicy {
-    FrameInterval,      // ÿ N ֡ȡ 1
-    TimeWindowQuota,    // ÿ����(��)���ȡ M ֡
-    Mixed,              // ֡�����ʱ�䴰����һ����
-    KeyframePriority,   // �ؼ�֡���ȣ��ؼ�֡��ѡ + ��ѡ�������
-    MixedKeyframe       // �ؼ�֡��ѡ �� (֡���/ʱ�䴰������)
+    FrameInterval,     
+    TimeWindowQuota,    
+    Mixed,              
+    KeyframePriority,   
+    MixedKeyframe
 };
 
-// ���ò�������ͨ�����������ã�
 struct FSConfig {
     FSPolicy policy = FSPolicy::FrameInterval;
-    int frame_interval = 60;          // ÿ N ֡ȡ 1
-    double window_seconds = 1.0;      // ʱ�䴰�ڳ��� (��)
-    int max_per_window = 2;           // ÿ�������ѡ֡��
-    int min_frames_between = 0;       // ����ѡ֡����С֡���
-    double min_seconds_between = 0.0; // ����ѡ֡����Сʱ����
-    int max_cached = 64;              // ��󻺴�����
-    bool remove_after_process = true; // FetchBatch ���Ƿ��Ƴ�����
-    // Keyframe / SceneCut ���
-    bool force_keyframe = true;       // �ؼ�֡�Ƿ�ǿ��ѡ��
-    bool enable_scene_cut = false;     // �Ƿ����ó����л�ѡ֡
-    int min_frames_between_scene_cut = 0; // �����������л���С���֡
-    double min_seconds_between_scene_cut = 0.0; // �����������л���С�����
-    bool enable_cache = false;        // �Ƿ�־û���ѡ��֡��Ĭ�Ϲرգ��������ⲿ�ͷų�ͻ��
+    int frame_interval = 60;          
+    double window_seconds = 1.0;      
+    int max_per_window = 2;           
+    int min_frames_between = 0;       
+    double min_seconds_between = 0.0; 
+    int max_cached = 64;              
+    bool remove_after_process = true; 
+    // Keyframe / SceneCut
+    bool force_keyframe = true;      
+    bool enable_scene_cut = false;     
+    int min_frames_between_scene_cut = 0;
+    double min_seconds_between_scene_cut = 0.0;
+    bool enable_cache = false;
 };
 
-// �����������ã����֡���Խ������������������������
 struct BatchConfig {
-    int batch_trigger = 10;      // K: ����ѡ��֡�����ﵽ K �ı���ʱ����������
-    int max_cache = 128;         // �����������֡����������ǿ�ƴ�����
-    int cb_batch_size = 10;         // һ��cb batch�а�����request����
-    int decode_window = 0;       // N: ������ͳ�ƴ��ڣ�0 ��ʾ��ʹ�ù̶����ڸ��
-    bool flush_partial = true;   // β������ K ֡�Ƿ��ڽ���ʱ��ִ��һ��������
-    bool new_batch_mode = false; // �Ƿ���������ģʽ�����ط�����ˣ�
-    int max_frames_per_request = 128; // ����һ�ε����󴫵ݵ�ͼ�����
+    int batch_trigger = 10;
+    int max_cache = 128;
+    int cb_batch_size = 10;
+    int decode_window = 0;
+    bool flush_partial = true;
+    bool new_batch_mode = false; 
+    int max_frames_per_request = 128;
 };
 
-// ȫ�����������ã���������/JSON д�룩�����������������δ���
-// - batch_trigger���ﵽ����ѡ��֡���� K ��ʱ����һ��������
-// - max_cache�������������֡����������ǿ�ƴ����Ա���ѻ���
-// - decode_window������ͳ�ƴ��ڴ�С��0 ��ʾ��ʹ�ù̶����ڸ��
-// - flush_partial������ʱ���� K ֡�Ƿ��Խ���һ��β��������
-// - new_batch_mode���Ƿ���������ģʽ�����ط��������Աȣ�
-extern BatchConfig g_batchConfig; // �������н�������
 
-struct CommonConfig {  // ȫ��ͨ������
+extern BatchConfig g_batchConfig; 
+
+struct CommonConfig {  
     bool debug = false;
     bool use_cb = false;
     bool cb_multi_thread = false; // enable CB engine/statistics threads when using CB
@@ -185,15 +178,6 @@ struct CommonConfig {  // ȫ��ͨ������
 };
 
 extern CommonConfig g_commonConfig;
-// ȫ�����ã���������/JSON д�룩���� FSConfig �ֶ�һһ��Ӧ
-// - frame_interval��ÿ N ֡ȡ 1
-// - window_seconds��ʱ�䴰�ڳ���(��)
-// - max_per_window��ÿ�������ѡ֡��
-// - min_frames_between / min_seconds_between������ѡ֡����С���(֡/��)
-// - max_cached / remove_after_process�������С��ȡ�����Ƿ��Ƴ�
-// - force_keyframe / enable_scene_cut���ؼ�֡�볡���л�ѡ֡����
-// - min_*_scene_cut�������л��������(֡/��)
-// - enable_cache���Ƿ�־û���ѡ��֡��Ĭ�Ϲرգ�
 extern FSConfig g_fsConfig;
 
 struct VLMConfig {

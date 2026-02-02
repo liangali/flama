@@ -4,8 +4,6 @@
 #include <optional>
 
 struct DemoConfig;
-
-// �����н����ṹ
 struct ParsedArgs {
     std::string input;
     std::string mode; // hw | sw
@@ -18,19 +16,8 @@ struct ParsedArgs {
     bool ok = true;
 };
 
-// CLI args use --name=value form only.
-// Supported examples:
-// --input=PATH
-// --video_dir=PATH
-// --mode=hw|sw
-// --out_dir=PATH
-// --config=PATH
-// --json_file=PATH
-// --prompt=TEXT
-// --debug=0|1
 ParsedArgs parseArgs(int argc, char* argv[]);
 
-// ���ַ�������������������·����
 struct ParsedArgsW {
     std::wstring input;
     std::wstring mode; // hw | sw

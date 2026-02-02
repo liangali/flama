@@ -1056,16 +1056,9 @@ static void RunBatchHW(/*bool use_cb*/)
         // Accumulate HW inference total in non-CB mode
         g_hw_inference_total_us += bs.inference_us;
     }
-    // prof::BatchAggregator::Get().RecordBatch(bs.windowDecoded, bs.windowSelected, bs.decode_total_us, scale_total_us, tensor_total_us, inference_us, prompt, out);
-    //// AppendResultRow(bs.batchIndex, useN, prompt, out);
-    // DBG_LOGF("[BatchHW] idx=%llu frames=%zu decode_window=%llu selected_window=%llu scale_us=%llu tensor_us=%llu infer_us=%llu", (unsigned long long)bs.batchIndex, bs.cached.size(), (unsigned long long)bs.windowDecoded, (unsigned long long)bs.windowSelected, (unsigned long long)scale_total_us, (unsigned long long)tensor_total_us, (unsigned long long)inference_us);
-    // FreeCachedFrames(bs.cached);
-    // bs.windowDecoded = 0;
-    // bs.windowSelected = 0;
-    // bs.decode_total_us = 0;
+
 }
 
-// 函数用于将 ID3D11Texture2D 的数据以 NV12 格式保存到文件
 bool SaveTextureToNV12File(ID3D11Device *device,
                            ID3D11DeviceContext *context,
                            ID3D11Texture2D *texture,
@@ -1080,11 +1073,9 @@ bool SaveTextureToNV12File(ID3D11Device *device,
     }
     DBG_LOG("SaveTextureToNV12File 3");
 
-    // 获取源纹理的描述信息
     D3D11_TEXTURE2D_DESC srcDesc;
     texture->GetDesc(&srcDesc);
 
-    // 创建 staging 纹理描述
     D3D11_TEXTURE2D_DESC stagingDesc = srcDesc;
     stagingDesc.Usage = D3D11_USAGE_STAGING;
     stagingDesc.BindFlags = 0;
@@ -1092,7 +1083,6 @@ bool SaveTextureToNV12File(ID3D11Device *device,
     stagingDesc.MiscFlags = 0;
     stagingDesc.ArraySize = 1;
 
-    // 创建 staging 纹理
     ID3D11Texture2D *stagingTexture = nullptr;
     HRESULT hr = device->CreateTexture2D(&stagingDesc, nullptr, &stagingTexture);
     if (FAILED(hr))
@@ -1101,11 +1091,9 @@ bool SaveTextureToNV12File(ID3D11Device *device,
         return false;
     }
 
-    // 将源纹理的数据复制到 staging 纹理
     // context->CopyResource(stagingTexture, texture);
     context->CopySubresourceRegion(stagingTexture, 0, 0, 0, 0, texture, arrayindex, nullptr);
 
-    // 映射 staging 纹理以读取数据
     D3D11_MAPPED_SUBRESOURCE mappedResource;
     hr = context->Map(stagingTexture, 0, D3D11_MAP_READ, 0, &mappedResource);
     if (FAILED(hr))
@@ -1115,14 +1103,12 @@ bool SaveTextureToNV12File(ID3D11Device *device,
         return false;
     }
 
-    // 计算 NV12 数据的大小
     UINT width = srcDesc.Width;
     UINT height = srcDesc.Height;
     UINT ySize = width * height;
     UINT uvSize = ySize / 2;
     UINT totalSize = ySize + uvSize;
 
-    // 打开文件以写入数据
     std::ofstream file(filename, std::ios::binary | std::ios::app);
     if (!file)
     {
@@ -1132,7 +1118,6 @@ bool SaveTextureToNV12File(ID3D11Device *device,
         return false;
     }
 
-    // 写入 Y 平面数据
     for (UINT y = 0; y < height; ++y)
     {
         file.write(reinterpret_cast<const char *>(reinterpret_cast<BYTE *>(mappedResource.pData) +
@@ -1140,7 +1125,6 @@ bool SaveTextureToNV12File(ID3D11Device *device,
                    width);
     }
 
-    // 写入 UV 平面数据
     for (UINT y = 0; y < height / 2; ++y)
     {
         file.write(reinterpret_cast<const char *>(reinterpret_cast<BYTE *>(mappedResource.pData) +
@@ -1148,25 +1132,18 @@ bool SaveTextureToNV12File(ID3D11Device *device,
                    width);
     }
 
-    // 关闭文件
     file.close();
-
-    // 解除映射
     context->Unmap(stagingTexture, 0);
-
-    // 释放 staging 纹理
     stagingTexture->Release();
 
     return true;
 }
 
-// 初始化FFmpeg
 void init_ffmpeg()
 {
     avformat_network_init();
 }
 
-// 查找视频流
 int find_video_stream(AVFormatContext *format_context)
 {
     for (unsigned int i = 0; i < format_context->nb_streams; i++)
@@ -1179,7 +1156,6 @@ int find_video_stream(AVFormatContext *format_context)
     return -1;
 }
 
-// 打开解码器
 AVCodecContext *open_decoder(AVFormatContext *format_context,
                              int stream_index,
                              const char *hw_device_type)
@@ -1273,7 +1249,6 @@ AVCodecContext *open_decoder(AVFormatContext *format_context,
     return codec_context;
 }
 
-// 软件解码器：不使用硬件设备，直接打开指定流的编解码器（按原始 codecpar->codec_id）
 AVCodecContext *open_decoder_sw(AVFormatContext *format_context, int stream_index)
 {
     AVCodecParameters *codec_params = format_context->streams[stream_index]->codecpar;
@@ -1295,7 +1270,7 @@ AVCodecContext *open_decoder_sw(AVFormatContext *format_context, int stream_inde
         avcodec_free_context(&codec_context);
         return nullptr;
     }
-    // 可设置线程数（软解可用多线程）
+
     if ((codec_context->codec_id == AV_CODEC_ID_HEVC || codec_context->codec_id == AV_CODEC_ID_H264) &&
         codec_context->thread_count == 0)
     {
@@ -1314,8 +1289,6 @@ AVCodecContext *open_decoder_sw(AVFormatContext *format_context, int stream_inde
     return codec_context;
 }
 
-// 将 CPU 内存中的 BGRA 帧数据上传到 D3D11 纹理 (DXGI_FORMAT_B8G8R8A8_UNORM)
-// 返回可供后续处理的 ID3D11Texture2D* (调用方负责 Release)
 static ID3D11Texture2D *CreateTextureFromBGRAFrame(ID3D11Device *device, ID3D11DeviceContext *context,
                                                    const AVFrame *frameBGRA)
 {
@@ -1334,11 +1307,10 @@ static ID3D11Texture2D *CreateTextureFromBGRAFrame(ID3D11Device *device, ID3D11D
     desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
     desc.SampleDesc.Count = 1;
     desc.Usage = D3D11_USAGE_DEFAULT;
-    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE; // 若后续需要 render target 可再加
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
     desc.CPUAccessFlags = 0;
     desc.MiscFlags = 0;
 
-    // 仅一行数据初始化，需处理 stride 行间距复制
     std::vector<uint8_t> linear(W * H * 4);
     const uint8_t *srcBase = frameBGRA->data[0];
     const int srcStride = frameBGRA->linesize[0];
@@ -1360,7 +1332,7 @@ static ID3D11Texture2D *CreateTextureFromBGRAFrame(ID3D11Device *device, ID3D11D
         std::cerr << "[SW] CreateTexture2D failed for BGRA frame." << std::endl;
         return nullptr;
     }
-    return tex; // 上传完成，返回纹理
+    return tex;
 }
 
 // 软件解码 + 转换 BGRA + 上传到 D3D11 纹理后调用 SceneUnderstand (支持 HEVC / 10-bit)
@@ -1368,8 +1340,8 @@ void decode_frames_sw(AVFormatContext *format_context, AVCodecContext *codec_con
 {
     auto sw_total_start_tp = std::chrono::steady_clock::now(); // measure entire function
     AVPacket *packet = av_packet_alloc();
-    AVFrame *frame = av_frame_alloc();     // 原始解码输出
-    AVFrame *frameBGRA = av_frame_alloc(); // 转换后的 BGRA
+    AVFrame *frame = av_frame_alloc();
+    AVFrame *frameBGRA = av_frame_alloc();
     if (!packet || !frame || !frameBGRA)
     {
         std::cerr << "[SW] Allocation failure for decoding structures." << std::endl;
@@ -1476,7 +1448,6 @@ void decode_frames_sw(AVFormatContext *format_context, AVCodecContext *codec_con
                 UpdateBatchSegmentTiming(pts_sec);
             }
 
-            // 首帧或变化日志
             if (frameCounter == 1)
             {
                 DBG_LOG(std::string("[SW] First selected frame fmt=") + av_get_pix_fmt_name((AVPixelFormat)srcForScale->format) + " size=" + std::to_string(srcForScale->width) + "x" + std::to_string(srcForScale->height));
@@ -1489,13 +1460,11 @@ void decode_frames_sw(AVFormatContext *format_context, AVCodecContext *codec_con
                 lastSrcFmt = (AVPixelFormat)srcForScale->format;
                 lastW = srcForScale->width;
                 lastH = srcForScale->height;
-                // 重建 sws
                 if (swsCtx)
                 {
                     sws_freeContext(swsCtx);
                     swsCtx = nullptr;
                 }
-                // 分配/重新分配 BGRA 目标帧缓冲
                 av_frame_unref(frameBGRA);
                 frameBGRA->format = AV_PIX_FMT_BGRA;
                 frameBGRA->width = target_width;
@@ -1568,11 +1537,10 @@ void decode_frames_sw(AVFormatContext *format_context, AVCodecContext *codec_con
 
             frameProfiler.MarkStageEnd(prof::Stage::Pipeline);
             frameProfiler.EndFrameAndWrite();
-            frameProfiler.MarkStageBegin(prof::Stage::Decode); // 为下一个 receive 做准备
+            frameProfiler.MarkStageBegin(prof::Stage::Decode); // prepare for next receive call
         }
     }
 
-    // Flush 解码器，获取尾帧（也应用抽帧策略）
     frameProfiler.BeginFrame(frameCounter);
     frameProfiler.MarkStageBegin(prof::Stage::Pipeline);
     frameProfiler.MarkStageBegin(prof::Stage::Decode);
@@ -1684,9 +1652,6 @@ void decode_frames_sw(AVFormatContext *format_context, AVCodecContext *codec_con
     g_sw_pipeline_total_us = std::chrono::duration_cast<std::chrono::microseconds>(sw_total_end_tp - sw_total_start_tp).count();
 }
 
-
-
-// 解码帧并获取缓冲区句柄
 void decode_frames(AVFormatContext *format_context,
                    AVCodecContext *codec_context,
                    int stream_index)
@@ -1694,12 +1659,9 @@ void decode_frames(AVFormatContext *format_context,
     auto hw_total_start_tp = std::chrono::steady_clock::now(); // measure entire function
     AVPacket packet;
     AVFrame *frame = av_frame_alloc();
-    // AVFrame *frame_hw = av_frame_alloc();
 
     int frameCount = 0;
     int infoLogCount = 0;
-    // FILE *fp;
-    // int err = fopen_s(&fp, "D:\\test\\VLM_test_video_clips\\000-S-三生不渡相思苦-E01-E03.mp4", "w+b");
     auto &frameProfiler = prof::FrameProfiler::Get();
     FrameSelector selector(g_fsConfig);
     AVRational time_base = format_context->streams[stream_index]->time_base;
@@ -1719,21 +1681,7 @@ void decode_frames(AVFormatContext *format_context,
             frameProfiler.MarkStageBegin(prof::Stage::Decode);
             while (avcodec_receive_frame(codec_context, frame) == 0)
             {
-                // Log first few decoded frames' pix_fmt and hw_frames_ctx
-                /*if (infoLogCount < 10)
-                {
-                    const char *fmt_name = av_get_pix_fmt_name((AVPixelFormat)frame->format);
-                    const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get((AVPixelFormat)frame->format);
-                    int bitDepth = desc ? desc->comp[0].depth : 0;
-                    DBG_LOGF("[HW] Decoded frame #%d: fmt=%s bitdepth=%d size=%dx%d hw_ctx=%s",
-                             frameCount,
-                             fmt_name ? fmt_name : "<unknown>",
-                             bitDepth,
-                             frame->width,
-                             frame->height,
-                             (frame->hw_frames_ctx ? "yes" : "no"));
-                }*/
-                frameProfiler.MarkStageEnd(prof::Stage::Decode); // 硬解码阶段结束
+                frameProfiler.MarkStageEnd(prof::Stage::Decode); 
                 if (g_batchConfig.new_batch_mode)
                 {
                     const auto &fr = frameProfiler.Current();
@@ -1794,7 +1742,6 @@ void decode_frames(AVFormatContext *format_context,
                         (AVHWFramesContext *)srcForVPP->hw_frames_ctx->data;
                     if (srcForVPP->format == hw_frames_ctx->format)
                     {
-                        // 获取缓冲区句柄
                         if (codec_context->hw_device_ctx)
                         {
                             AVHWDeviceContext *hw_device_ctx =
@@ -2023,7 +1970,6 @@ void decode_frames(AVFormatContext *format_context,
                                         opts.surfaceType = MFX_SURFACE_TYPE_D3D11_TEX2D;
                                         opts.surfaceFlag = MFX_SURFACE_FLAG_IMPORT_SHARED;
                                         opts.pDevice = m_pD3D11Device;
-                                        // opts.outfileName = "D:\\temp\\dump.argb";
                                         pVPPTester->Init(0, opts, nullptr);
 
                                         // VideoSegParams params;
@@ -2102,7 +2048,7 @@ void decode_frames(AVFormatContext *format_context,
                 av_frame_free(&selectedFrame);
                 frameProfiler.MarkStageEnd(prof::Stage::Pipeline);
                 frameProfiler.EndFrameAndWrite();
-                frameProfiler.MarkStageBegin(prof::Stage::Decode); // 硬解码阶段结束
+                frameProfiler.MarkStageBegin(prof::Stage::Decode);
             }
         }
         av_packet_unref(&packet);
@@ -2153,7 +2099,6 @@ void decode_frames(AVFormatContext *format_context,
     g_hw_pipeline_total_us = std::chrono::duration_cast<std::chrono::microseconds>(hw_total_end_tp - hw_total_start_tp).count();
 }
 
-// 释放资源
 void cleanup(AVFormatContext *format_context, AVCodecContext *codec_context)
 {
     avcodec_free_context(&codec_context);
@@ -2201,51 +2146,6 @@ std::string WideToUtf81(const std::wstring &wstr)
     return utf8_str;
 }
 
-// -----------------------------------------------------------------
-// FFmpeg usage example
-// -----------------------------------------------------------------
-int main4()
-{
-    SetConsoleOutputCP(CP_UTF8);
-    // 步骤 1: 获取含有中文的 UTF-16 路径
-    // 假设这是通过文件对话框或C++的std::wstring读取到的
-
-    std::wstring input_path_w = L"D:\\test\\VLM_test_video_clips\\002-租个女婿回家见父母-E01-E05.mp4";
-
-    // 步骤 2: 将 UTF-16 路径转换为 FFmpeg 需要的 UTF-8 路径
-    std::string input_path_utf8 = WideToUtf81(input_path_w);
-
-    if (input_path_utf8.empty())
-    {
-        std::cerr << "错误：路径编码转换失败。" << std::endl;
-        return 1;
-    }
-
-    // 步骤 3: 打印转换后的 UTF-8 路径
-    // 注意：在某些控制台中，直接打印 UTF-8 可能会显示乱码，但FFmpeg能正确接收
-    std::cout << "FFmpeg 尝试打开路径 (UTF-8): " << input_path_utf8 << std::endl;
-
-    // -------------------------------------------------------------
-    // 步骤 4: 调用 avformat_open_input
-    // -------------------------------------------------------------
-    AVFormatContext *pFormatCtx = NULL;
-    int ret = avformat_open_input(&pFormatCtx, input_path_utf8.c_str(), NULL, NULL);
-
-    if (ret < 0)
-    {
-        char err_buf[AV_ERROR_MAX_STRING_SIZE];
-        av_strerror(ret, err_buf, sizeof(err_buf));
-        std::cerr << "错误：无法打开文件 " << input_path_utf8 << ". 错误码: " << err_buf << std::endl;
-        return 1;
-    }
-
-    std::cout << "成功打开文件，格式名称: " << pFormatCtx->iformat->name << std::endl;
-
-    // 清理资源
-    avformat_close_input(&pFormatCtx);
-
-    return 0;
-}
 std::wstring ExtractFilenameWithoutExt(const std::wstring &fullPath)
 {
     wchar_t drive[_MAX_DRIVE];
@@ -2253,10 +2153,8 @@ std::wstring ExtractFilenameWithoutExt(const std::wstring &fullPath)
     wchar_t fname[_MAX_FNAME];
     wchar_t ext[_MAX_EXT];
 
-    // 使用 Windows CRT 函数 _wsplitpath_s 来安全地分解路径 (UTF-16)
     _wsplitpath_s(fullPath.c_str(), drive, _MAX_DRIVE, dir, _MAX_DIR, fname, _MAX_FNAME, ext, _MAX_EXT);
 
-    // 返回文件名部分 (不含扩展名)
     return std::wstring(fname);
 }
 
@@ -2519,7 +2417,7 @@ int main(int argc, char *argv[])
             continue;
         }
 
-        std::cout << "成功打开文件： " << input_file << " 文件格式名称: " << format_context->iformat->name << std::endl;
+        std::cout << "Opened input video file " << input_file << " file format: " << format_context->iformat->name << std::endl;
 
         if (avformat_find_stream_info(format_context, nullptr) < 0)
         {
@@ -2597,7 +2495,7 @@ int main(int argc, char *argv[])
         prof::BatchAggregator::Get().SetOutputFileW(batchPathW.wstring());
         DBG_LOG(std::string("[BATCH] Output -> ") + WideToUtf8(batchPathW.wstring()));
 #else
-        prof::FrameProfiler::SetOutputFile(profFile); // 单例逐帧日志与累计日志同路径
+        prof::FrameProfiler::SetOutputFile(profFile);
         DBG_LOG(std::string("[PROF] Output -> ") + profFile);
         SetVLMResultFile(resultFile);
         prof::BatchAggregator::Get().SetOutputFile(batchFile);

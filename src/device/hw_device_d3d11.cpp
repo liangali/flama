@@ -23,7 +23,6 @@ mfxStatus DevCtxD3D11::InitDevice(mfxU32 nAdapterNum, mfxHandleType *pHandleType
     hres = pDXGIFactory->EnumAdapters(nAdapterNum, &pAdapter);
     if (FAILED(hres))
         return MFX_ERR_DEVICE_FAILED;
-    // ����ʹ�� D3D_DRIVER_TYPE_HARDWARE �������� GPU �����������
     hres = D3D11CreateDevice(pAdapter,
                             //  D3D_DRIVER_TYPE_HARDWARE
                             D3D_DRIVER_TYPE_UNKNOWN,

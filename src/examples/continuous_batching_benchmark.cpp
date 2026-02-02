@@ -67,64 +67,6 @@ namespace CBPipeline
     bool Dataset::empty() const { return size() == 0; }
     size_t Dataset::size() const { return m_prompts.size(); }
 
-    // Dataset filtered_dataset(const std::string& models_path, const std::string& dataset_path, const size_t num_prompts, const size_t max_input_len, const size_t max_output_len) {
-    //     std::ifstream json_file(dataset_path.c_str());
-    //     OPENVINO_ASSERT(json_file.is_open(), "Cannot open dataset file");
-    //
-    //     // from vLLM tput benchmark
-    //     const float dataset_size_coeff = 1.2f;
-    //
-    //     nlohmann::json json_dataset = nlohmann::json::parse(json_file);
-    //     Dataset sampled_dataset, dataset;
-    //     const size_t num_prompt_candidates = static_cast<size_t>(num_prompts * dataset_size_coeff);
-    //     sampled_dataset.reserve(num_prompt_candidates);
-    //     dataset.reserve(num_prompt_candidates);
-    //
-    //     ov::genai::Tokenizer tokenizer(models_path);
-    //
-    //     for (auto json_data_iterator = json_dataset.begin(); json_data_iterator != json_dataset.end() && dataset.size() < num_prompt_candidates; ++json_data_iterator) {
-    //         auto & json_data = *json_data_iterator;
-    //
-    //         // Filter out the conversations with less than 2 turns.
-    //         if (json_data["conversations"].size() < 2)
-    //             continue;
-    //
-    //         // Only keep the first two turns of each conversation.
-    //         std::string human_question = json_data["conversations"][0]["value"];
-    //         std::string gpt_answer = json_data["conversations"][1]["value"];
-    //
-    //         ov::Tensor _input_ids_prompt = tokenizer.encode(human_question).input_ids;
-    //         size_t input_len = _input_ids_prompt.get_size();
-    //
-    //         ov::Tensor _input_ids_answer = tokenizer.encode(gpt_answer).input_ids;
-    //         size_t output_len = _input_ids_answer.get_size();
-    //
-    //         // Prune too short sequences.
-    //         if (input_len < 4 || output_len < 4)
-    //             continue;
-    //         // Prune too long sequences.
-    //         if (input_len > max_input_len || (input_len + output_len) > 2048)
-    //             continue;
-    //
-    //         ov::genai::GenerationConfig greedy_search = ov::genai::greedy();
-    //         greedy_search.max_new_tokens = std::min(max_output_len, output_len);
-    //         greedy_search.ignore_eos = true;
-    //
-    //         dataset.push_data(human_question, greedy_search);
-    //         dataset.push_lens(input_len, output_len);
-    //     }
-    //
-    //     // sample dataset
-    //     srand(42);
-    //
-    //     for (size_t selected_index = rand() % dataset.size(); sampled_dataset.size() < num_prompts; selected_index = rand() % dataset.size()) {
-    //         sampled_dataset.push_data(dataset.m_prompts[selected_index], dataset.m_sampling_params[selected_index]);
-    //         sampled_dataset.push_lens(dataset.m_input_lens[selected_index], dataset.m_output_lens[selected_index]);
-    //     }
-    //
-    //     return sampled_dataset;
-    // }
-
     // GenerationInfo method implementations
     GenerationInfo::GenerationInfo(ov::genai::GenerationHandle generation_handle_, size_t input_len_)
         : input_len(input_len_)
@@ -275,63 +217,6 @@ namespace CBPipeline
 
         std::cout << "Exiting statistics reporter thread." << std::endl;
     }
-
-    // bool parse_plugin_config_json(nlohmann::json& node, ov::AnyMap& device_config_map) {
-    //     if (!node.is_object()) {
-    //         std::cout << "Error: nlohmann json object is not an object." << std::endl;
-    //         return false;
-    //     }
-    //     for (auto& element : node.items()) {
-    //         if (element.value().is_string()) {
-    //             device_config_map[std::string(element.key())] = element.value().get<std::string>();
-    //             std::cout << "Setting plugin config: " << element.key() << " : " << element.value().get<std::string>() << std::endl;
-    //         } else if (element.value().is_number_integer()) {
-    //             device_config_map[std::string(element.key())] = element.value().get<std::int64_t>();
-    //             std::cout << "Setting plugin config: " << element.key() << " : " << element.value().get<std::int64_t>() << std::endl;
-    //         } else if (element.value().is_number_float()) {
-    //             device_config_map[std::string(element.key())] = element.value().get<float>();
-    //             std::cout << "Setting plugin config: " << element.key() << " : " << element.value().get<float>() << std::endl;
-    //         } else if (element.value().is_number_unsigned()) {
-    //             device_config_map[std::string(element.key())] = element.value().get<uint64_t>();
-    //             std::cout << "Setting plugin config: " << element.key() << " : " << element.value().get<float>() << std::endl;
-    //         } else if (element.value().is_boolean()) {
-    //             device_config_map[std::string(element.key())] = element.value().get<bool>();
-    //             std::cout << "Setting plugin config: " << element.key() << " : " << element.value().get<bool>() << std::endl;
-    //         } else {
-    //             std::cout << "Error: nlohmann json type not supported for: " << element.key() << std::endl;
-    //             return false;
-    //         }
-    //     }
-    //
-    //     return true;
-    // }
-    //
-    // bool parse_plugin_config_string(const std::string& config_string, ov::AnyMap& device_config_map) {
-    //     if (config_string.empty()) {
-    //         std::cout << "Empty plugin config string. " << std::endl;
-    //         return true;
-    //     }
-    //
-    //     nlohmann::json node;
-    //     try {
-    //         node = nlohmann::json::parse(config_string);
-    //     } catch (const nlohmann::json::parse_error& e) {
-    //         std::cout << "ERROR: Plugin config json parser error - message: " << e.what() << '\n'
-    //                 << "exception id: " << e.id << '\n'
-    //                 << "byte position of error: " << e.byte << std::endl;
-    //                 return false;
-    //     } catch (...) {
-    //         std::cout << "ERROR: Plugin config json parser error - message: " << std::endl;
-    //         return false;
-    //     }
-    //
-    //     if (node.is_null()) {
-    //         std::cout << "Error: nlohmann json object is null." << std::endl;
-    //         return false;
-    //     }
-    //
-    //     return parse_plugin_config_json(node, device_config_map);
-    // }
 } // namespace
 
 int main(int argc, char *argv[])

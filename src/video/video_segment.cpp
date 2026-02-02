@@ -666,13 +666,11 @@ mfxStatus InferFrame(ov::intel_gpu::ocl::VAContext context,
 
     /*auto outputTensor = inferRequest.get_tensor(outputName);
 
-    // 获取输出张量
     const float* outputData = outputTensor.data<const float>();
     std::vector<float> scores(outputTensor.get_size());
     std::cout << "tensor size:"<< outputTensor.get_size()<<std::endl;
     */
 
-    // 获取输出张量
     ov::Tensor outputTensor = inferRequest.get_output_tensor();
     const float* outputData = outputTensor.data<const float>();
     std::vector<float> feature(outputTensor.get_size());

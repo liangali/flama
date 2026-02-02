@@ -165,7 +165,7 @@ ov::Tensor ConvertD3DTextureToOVTensorCPU(
         fmt != DXGI_FORMAT_NV12)
         throw std::runtime_error("ConvertD3DTextureToOVTensorCPU: unsupported DXGI_FORMAT");
 
-    // 建立 staging (TensorBuild timing handled via explicit FrameProfiler in caller)
+    // staging (TensorBuild timing handled via explicit FrameProfiler in caller)
     D3D11_TEXTURE2D_DESC stage = td;
     stage.Usage = D3D11_USAGE_STAGING;
     stage.BindFlags = 0;
@@ -187,8 +187,6 @@ ov::Tensor ConvertD3DTextureToOVTensorCPU(
     const size_t W = td.Width;
     const size_t H = td.Height;
     const size_t planeBytes = W * H * 3;
-   //  std::cout << "[VLM HW] Frame " << W << "x" << H << ", planeBytes=" << planeBytes << std::endl;
-    // 自定义分配器（与 stb 例子风格不同，使用 new[] 释放）
     struct TexAllocator
     {
         unsigned char *buf;
@@ -203,7 +201,6 @@ ov::Tensor ConvertD3DTextureToOVTensorCPU(
         {
             if (p != buf || bytes != expect)
             {
-                // 尽量保持安静释放
             }
             delete[] buf;
         }
@@ -227,7 +224,6 @@ ov::Tensor ConvertD3DTextureToOVTensorCPU(
         {
             const uint8_t *row = static_cast<const uint8_t *>(mapped.pData) + y * mapped.RowPitch;
             uint8_t *out = rgb + y * W * 3;
-            // 将一行拆包为 RGB
             for (size_t x = 0; x < W; ++x)
             {
                 const uint8_t *px = row + x * 4; // B,G,R,A
@@ -284,15 +280,11 @@ ov::Tensor ConvertD3DTextureToOVTensorCPU(
     }
 
     // finish(true);
-
-    // 构造 NHWC Tensor
     return ov::Tensor(
         ov::element::u8,
         ov::Shape{1, H, W, 3},
         TexAllocator{rgb, planeBytes});
 }
-// Unified sampling & inference helper for both texture and BGRA paths.
-// Maintains a single global buffer and frame counter.
 
 struct SampleState
 {
@@ -317,8 +309,6 @@ constexpr size_t kMaxKeep = 10;       // retain tail images
 
 void ProcessSampleAndMaybeInfer(const ov::Tensor &image_tensor)
 {
-    // 打印 image_tensor 的 shape 和 size
-    // std::cout << "[VLM] image_tensor shape: [";
     for (size_t i = 0; i < image_tensor.get_shape().size(); ++i)
     {
     DBG_LOGF("[VLM] shape dim %zu = %zu", i, image_tensor.get_shape()[i]);
@@ -368,12 +358,8 @@ void ProcessSampleAndMaybeInfer(const ov::Tensor &image_tensor)
     }
 }
 
-
-
-// 新增：采样函数
 int ProcessSample(const ov::Tensor &image_tensor)
 {
-    // 打印 image_tensor 的 shape 和 size
     //std::cout << "[VLM] image_tensor shape: [";
     //for (size_t i = 0; i < image_tensor.get_shape().size(); ++i)
     //{
@@ -402,7 +388,6 @@ int ProcessSample(const ov::Tensor &image_tensor)
     return 1;
 }
 
-// 新增：推理函数
 void ProcessInfer(const std::vector<ov::Tensor> &buffer)
 {
     ov::genai::VLMPipeline &pipe = GetCachedVLMPipeline();
@@ -464,7 +449,6 @@ int SceneUnderstand(ID3D11Device *d3d_device,
     return 0;
 }
 
-// BGRA AVFrame 版本：用于软件解码得到的 BGRA 帧直接转换并参与采样/批量推理
 int SceneUnderstandSW(ID3D11Device *d3d_device,
                       ID3D11DeviceContext *d3d_context,
                       const AVFrame *frameBGRA)
@@ -478,7 +462,6 @@ int SceneUnderstandSW(ID3D11Device *d3d_device,
         const int H = frameBGRA->height;
         if (W <= 0 || H <= 0)
             return 0;
-        // 假设格式为 BGRA（调用方保证 swscale 输出）
         const uint8_t *src = frameBGRA->data[0];
         const int stride = frameBGRA->linesize[0];
         const size_t rgbBytes = size_t(W) * size_t(H) * 3;
@@ -525,8 +508,6 @@ int SceneUnderstandSW(ID3D11Device *d3d_device,
     return 0;
 }
 
-// 简单检查 openvino.genai (VLMPipeline) 开发环境是否就绪
-// 返回 true=准备好；false=失败并打印原因
 bool CheckGenAIEnvironment(const std::string &modelDir,
                            const std::string &device,
                            bool runTestInference)
@@ -534,14 +515,12 @@ bool CheckGenAIEnvironment(const std::string &modelDir,
     namespace fs = std::filesystem;
     DBG_LOG(std::string("[GenAI] OpenVINO Version: ") + ov::get_openvino_version().buildNumber);
 
-    // 1. 模型目录检查
     if (!fs::exists(modelDir) || !fs::is_directory(modelDir))
     {
         std::cerr << "[GenAI] Model directory not found: " << modelDir << std::endl;
         return false;
     }
 
-    // 2. 尝试列出主要文件（可选）
     size_t xmlCount = 0;
     for (auto &p : fs::directory_iterator(modelDir))
     {
@@ -553,7 +532,6 @@ bool CheckGenAIEnvironment(const std::string &modelDir,
     DBG_LOG("[GenAI] (Info) No .xml files detected, model may be GGUF or other format.");
     }
 
-    // 3. 尝试创建 VLMPipeline
     std::unique_ptr<ov::genai::VLMPipeline> pipeline;
     try
     {
@@ -572,11 +550,9 @@ bool CheckGenAIEnvironment(const std::string &modelDir,
         return true;
     }
 
-    //// 4. 构造一个最小假图像 (1x3x32x32) 以防模型需要视觉输入
     // ov::Tensor dummyImage(ov::element::u8, {1, 32, 32, 3}); // NHWC
     // std::memset(dummyImage.data(), 0, dummyImage.get_byte_size());
 
-    //// 5. 进行最小生成测试
     // try {
     //     std::string prompt = "Describe the following image briefly: <image>.";
     //     auto result = pipeline->generate(prompt, ov::genai::image(dummyImage));
@@ -598,9 +574,8 @@ ov::genai::VLMPipeline& GetCachedVLMPipeline()
     static std::once_flag g_once;
     std::call_once(g_once, []()
         {
-            //std::string path = "D:\\models\\Qwen2.5-VL-3B-Instruct-int4-opt";
-            //std::string device = "GPU"; // 若需 GPU 可改
             LogVLMModelDeviceInfo(g_vlmConfig.path, g_vlmConfig.device);
-            g_pipeline = std::make_unique<ov::genai::VLMPipeline>(g_vlmConfig.path, g_vlmConfig.device); });
+            g_pipeline = std::make_unique<ov::genai::VLMPipeline>(g_vlmConfig.path, g_vlmConfig.device); 
+        });
     return *g_pipeline;
 }

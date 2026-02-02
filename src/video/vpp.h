@@ -39,7 +39,7 @@ private:
     OpenCLCtx *m_pOclCtx;
 #endif
     mfxVideoParam m_vppParams;
-    Options        m_opts{};       // 拷贝保存
+    Options        m_opts{}; 
     Options *m_pOpts;
     FrameInfo m_frameInfo;
     FileInfo m_fileInfo;
