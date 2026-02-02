@@ -348,7 +348,6 @@ class VlmJsonCollector
 public:
     void StartVideo(const std::string &input_video, const std::string &prompt)
     {
-        std::lock_guard<std::mutex> lk(mutex_);
         VlmJsonVideo v;
         v.input_video = input_video;
         v.prompt = prompt;
@@ -358,7 +357,6 @@ public:
 
     void AddSegment(double seg_start, double seg_end, const std::string &desc)
     {
-        std::lock_guard<std::mutex> lk(mutex_);
         if (videos_.empty())
             return;
         VlmJsonVideo &v = videos_[current_index_];
@@ -373,19 +371,16 @@ public:
 
     std::vector<VlmJsonVideo> Snapshot() const
     {
-        std::lock_guard<std::mutex> lk(mutex_);
         return videos_;
     }
 
     void Reset()
     {
-        std::lock_guard<std::mutex> lk(mutex_);
         videos_.clear();
         current_index_ = 0;
     }
 
 private:
-    mutable std::mutex mutex_;
     std::vector<VlmJsonVideo> videos_;
     size_t current_index_ = 0;
 };
