@@ -28,6 +28,18 @@ void TextureResourcePool::ReturnResource(ID3D11Texture2D* texture) {
     }
 }
 
+// Release all textures and clear the pool
+void TextureResourcePool::ReleaseAll() {
+    for (auto& resource : resources) {
+        if (resource.pTexture) {
+            resource.pTexture->Release();
+            resource.pTexture = nullptr;
+        }
+        resource.used = false;
+    }
+    resources.clear();
+}
+
 // Set texture resource
 void TextureResourcePool::SetTexture(size_t index, ID3D11Texture2D* texture) {
     if (index < resources.size()) {

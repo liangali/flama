@@ -24,6 +24,9 @@ public:
     // Return resource
     void ReturnResource(ID3D11Texture2D* texture);
 
+    // Release all resources and clear pool
+    void ReleaseAll();
+
     // Set texture resource
     void SetTexture(size_t index, ID3D11Texture2D* texture);
 };

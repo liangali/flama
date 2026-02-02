@@ -308,6 +308,32 @@ struct BatchState
 
 static BatchState g_batchState; // SW path usage; HW path can extend similarly
 
+static void ResetHwResources()
+{
+    g_batchState.reset();
+    if (pVPPTester)
+    {
+        delete pVPPTester;
+        pVPPTester = nullptr;
+    }
+    if (m_temp_texture)
+    {
+        m_temp_texture->Release();
+        m_temp_texture = nullptr;
+    }
+    m_texturePool.ReleaseAll();
+    if (m_pD3D11DeviceContext)
+    {
+        m_pD3D11DeviceContext->Release();
+        m_pD3D11DeviceContext = nullptr;
+    }
+    if (m_pD3D11Device)
+    {
+        m_pD3D11Device->Release();
+        m_pD3D11Device = nullptr;
+    }
+}
+
 // Store CB inference parameters to enqueue after decoding completes
 struct CBInferenceParams {
     size_t batchIndex;
@@ -2540,6 +2566,10 @@ int main(int argc, char *argv[])
         }
 
         cleanup(format_context, codec_context);
+        if (useHardware)
+        {
+            ResetHwResources();
+        }
 
         DBG_LOG("[VLM] Result file finalized.");
 

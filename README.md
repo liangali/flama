@@ -195,4 +195,5 @@ copy ..\config\example_config.json ..\config\my_config.json
 
 ```powershell
 flama.exe --input=D:\data\videoclips\phone2\007_input\test(00).mp4 --mode=hw
+flama.exe --video_dir=D:\data\videoclips\phone2\007_input --mode=hw
 ```
