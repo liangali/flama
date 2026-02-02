@@ -3,6 +3,8 @@
 #include <string>
 #include <optional>
 
+struct DemoConfig;
+
 // �����н����ṹ
 struct ParsedArgs {
     std::string input;
@@ -23,8 +25,8 @@ struct ParsedArgs {
     bool ok = true;
 };
 
-// ������λ�ò���  <input> <hw|sw> [outDir]
-// �Լ���ѡ���ԣ�
+// CLI args use --name=value form only.
+// Optional examples:
 // --sel-policy=frame|time|mixed
 // --frame-interval=N
 // --window-seconds=S
@@ -32,8 +34,8 @@ struct ParsedArgs {
 // --min-frames-between=N
 // --min-seconds-between=S
 // --max-cached=N
-// --keep-cache         (���� remove_after_process=false)
-// --debug / -d
+// --keep-cache=0|1
+// --debug=0|1
 ParsedArgs parseArgs(int argc, char* argv[]);
 
 // ���ַ�������������������·����
@@ -57,3 +59,23 @@ struct ParsedArgsW {
 };
 
 ParsedArgsW parseArgsW(int argc, wchar_t* argv[]);
+
+// Print full help message (all CLI args use --name=value)
+void PrintHelp(const char* exeName);
+
+// Parse CLI, load JSON config, and apply config to globals.
+// Returns true on success or when --help is requested.
+bool ParseCommandLineAndLoadConfig(int argc,
+                                   char* argv[],
+                                   ParsedArgs& pa,
+                                   ParsedArgsW& paw,
+                                   DemoConfig& cfg,
+                                   std::string& cfgErr,
+                                   bool& showHelp);
+
+// Apply config defaults for missing CLI values and validate required args.
+// Returns false if required args are still missing (also prints help).
+bool FinalizeParsedArgs(ParsedArgs& pa,
+                        const ParsedArgsW& paw,
+                        const DemoConfig& cfg,
+                        const char* exeName);

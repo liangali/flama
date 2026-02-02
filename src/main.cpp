@@ -2355,169 +2355,18 @@ static bool WriteVlmJsonFile(const std::filesystem::path &outPath, const std::ve
 int main(int argc, char *argv[])
 {
     SetConsoleOutputCP(CP_UTF8);
-    // Load JSON config early (resolve --config from wide/ansi args)
-    DemoConfig cfg; std::string cfgErr; bool haveCfg = false;
-    std::wstring configPathW; std::string configPath;
-    // Try wide-char parsing to support Unicode paths on Windows
+    // Load JSON config early (resolve --config from args)
+    DemoConfig cfg;
+    std::string cfgErr;
     ParsedArgs pa{};
     ParsedArgsW paw{};
-#ifdef _WIN32
-    auto getExeDirW = []() -> std::wstring {
-        wchar_t buf[MAX_PATH];
-        DWORD len = GetModuleFileNameW(nullptr, buf, MAX_PATH);
-        if (len == 0 || len == MAX_PATH) return L".";
-        std::filesystem::path p(buf);
-        return p.parent_path().wstring();
-    };
-    int wargc = 0;
-    wchar_t **wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
-    if (wargv && wargc > 0)
-    {
-        // Pre-scan for --config to load JSON defaults
-        for (int i = 0; i < wargc; ++i) {
-            std::wstring a = wargv[i];
-            if (a == L"--config" && (i + 1) < wargc && wargv[i + 1] && wargv[i + 1][0] != L'-') {
-                configPathW = wargv[++i];
-            }
-            else if (a.rfind(L"--config=", 0) == 0) {
-                configPathW = a.substr(9);
-            }
-        }
-        if (configPathW.empty()) {
-            std::filesystem::path p(getExeDirW());
-            p /= L"config.json";
-            configPathW = p.wstring();
-        }
-        if (LoadJSONConfigW(configPathW, cfg, cfgErr)) {
-            ApplyConfig(cfg);
-            haveCfg = true;
-        } else {
-            std::wcerr << L"[Config] Failed to load config: " << configPathW << L" (" << Utf8ToWide(cfgErr) << L")" << std::endl;
-            LocalFree(wargv);
-            return 1;
-        }
-        /*ParsedArgsW*/ paw = parseArgsW(wargc, wargv);
-        if (paw.ok)
-        {
-            pa.ok = true;
-            pa.debug = paw.debug;
-            pa.use_cb = paw.use_cb;
-            pa.cb_batch_size = paw.cb_batch_size;
-            pa.input = WideToUtf8(paw.input); // FFmpeg expects UTF-8
-            pa.mode = WideToUtf8(paw.mode);
-            pa.prompt = WideToUtf8(paw.prompt);
-            // outDir as wide path; build outputs later with wide
-            // store UTF-8 for fallback uses; we'll keep wide separately below
-            pa.outDir = WideToUtf8(paw.outDir);
-            pa.configPath = WideToUtf8(paw.configPath);
-            pa.videoDir = WideToUtf8(paw.videoDir);
-            pa.jsonFile = WideToUtf8(paw.jsonFile);
-        }
-        else
-        {
-            pa = parseArgs(argc, argv);
-            if (!paw.videoDir.empty())
-                pa.videoDir = WideToUtf8(paw.videoDir);
-            if (!paw.jsonFile.empty())
-                pa.jsonFile = WideToUtf8(paw.jsonFile);
-            if (!paw.input.empty() && pa.input.empty())
-                pa.input = WideToUtf8(paw.input);
-            if (!paw.mode.empty() && pa.mode.empty())
-                pa.mode = WideToUtf8(paw.mode);
-            if (!paw.outDir.empty() && pa.outDir.empty())
-                pa.outDir = WideToUtf8(paw.outDir);
-            if (!paw.prompt.empty() && pa.prompt.empty())
-                pa.prompt = WideToUtf8(paw.prompt);
-            if (!paw.configPath.empty() && pa.configPath.empty())
-                pa.configPath = WideToUtf8(paw.configPath);
-        }
-        LocalFree(wargv);
-    }
-    else
-    {
-        // ANSI path: pre-scan --config then load JSON
-        for (int i = 0; i < argc; ++i) {
-            std::string a = argv[i] ? argv[i] : "";
-            if (a == "--config" && (i + 1) < argc && argv[i + 1] && argv[i + 1][0] != '-') {
-                configPath = argv[++i];
-            }
-            else if (a.rfind("--config=", 0) == 0) {
-                configPath = a.substr(9);
-            }
-        }
-        if (configPath.empty()) {
-            std::filesystem::path p(getExeDirW());
-            p /= L"config.json";
-            configPath = WideToUtf8(p.wstring());
-        }
-        if (LoadJSONConfig(configPath, cfg, cfgErr)) {
-            ApplyConfig(cfg);
-            haveCfg = true;
-        } else {
-            std::cerr << "[Config] Failed to load config: " << configPath << " (" << cfgErr << ")" << std::endl;
-            return 1;
-        }
-        pa = parseArgs(argc, argv);
-    }
-#else
-    auto getExeDirA = [argv]() -> std::string {
-        std::filesystem::path p = argv && argv[0] ? std::filesystem::absolute(argv[0]) : std::filesystem::current_path();
-        return p.parent_path().string();
-    };
-    // Non-Windows: ANSI only
-    for (int i = 0; i < argc; ++i) {
-        std::string a = argv[i] ? argv[i] : "";
-        if (a == "--config" && (i + 1) < argc && argv[i + 1] && argv[i + 1][0] != '-') {
-            configPath = argv[++i];
-        }
-        else if (a.rfind("--config=", 0) == 0) {
-            configPath = a.substr(9);
-        }
-    }
-    if (configPath.empty()) {
-        std::filesystem::path p(getExeDirA());
-        p /= "config.json";
-        configPath = p.string();
-    }
-    if (LoadJSONConfig(configPath, cfg, cfgErr)) {
-        ApplyConfig(cfg);
-        haveCfg = true;
-    } else {
-        std::cerr << "[Config] Failed to load config: " << configPath << " (" << cfgErr << ")" << std::endl;
+    bool showHelp = false;
+    if (!ParseCommandLineAndLoadConfig(argc, argv, pa, paw, cfg, cfgErr, showHelp))
         return 1;
-    }
-    pa = parseArgs(argc, argv);
-#endif
-    // If CLI parsing failed, try composing required fields from config
-    bool hasVideoDir = (!pa.videoDir.empty() || !paw.videoDir.empty());
-    if (!pa.ok)
-    {
-        if (cfg.commonCfg.mode) {
-            pa.mode = cfg.commonCfg.mode.value();
-        }
-        if (cfg.commonCfg.input && pa.input.empty() && !hasVideoDir) {
-            pa.input = cfg.commonCfg.input.value();
-        }
-        if (cfg.commonCfg.out_dir) {
-            pa.outDir = cfg.commonCfg.out_dir.value();
-        }
-        if (cfg.batch.cb_batch_size) pa.cb_batch_size = std::max(0, cfg.batch.cb_batch_size.value());
-        pa.ok = (!pa.mode.empty() && (!pa.input.empty() || hasVideoDir));
-    }
-    if (!pa.ok)
-    {
-        std::cerr << "Usage: " << argv[0] << " <input_file> <hw|sw> [out_dir] \n"
-                  << "  --sel-policy=frame|time|mixed \n"
-                  << "  --frame-interval=N --window-seconds=S --max-per-window=M \n"
-                  << "  --min-frames-between=N --min-seconds-between=S \n"
-                  << "  --max-cached=N [--keep-cache] [--debug] \n"
-                  << "  --config=PATH_TO_JSON \n"
-                  << "  --video_dir=PATH_TO_VIDEO_DIR \n"
-                  << "  --json_file=PATH_TO_OUTPUT_JSON \n"
-                  << "  --max_num_seqs=N \n"
-                  << "  --dynamic_split_fuse=true|false" << std::endl;
+    if (showHelp)
+        return 0;
+    if (!FinalizeParsedArgs(pa, paw, cfg, argv && argv[0] ? argv[0] : nullptr))
         return 1;
-    }
     if (pa.debug || std::getenv("VLM_DEBUG"))
     {
         g_commonConfig.debug = true;
@@ -2552,23 +2401,12 @@ int main(int argc, char *argv[])
 #ifdef _WIN32
     // Preserve a wide outDir for output file construction
     std::wstring outDirW;
-    {
-        int wargc2 = 0;
-        wchar_t **wargv2 = CommandLineToArgvW(GetCommandLineW(), &wargc2);
-        if (wargv2 && wargc2 > 0)
-        {
-            ParsedArgsW paw2 = parseArgsW(wargc2, wargv2);
-            if (paw2.ok)
-                outDirW = paw2.outDir;
-            else
-                outDirW = Utf8ToWide(outDir);
-            LocalFree(wargv2);
-        }
-        else
-        {
-            outDirW = Utf8ToWide(outDir);
-        }
-    }
+    if (!paw.outDir.empty())
+        outDirW = paw.outDir;
+    else if (!pa.outDir.empty())
+        outDirW = Utf8ToWide(pa.outDir);
+    else
+        outDirW = Utf8ToWide(outDir);
 #endif
    // bool useSoftware = (mode == "sw" || mode == "SW");
    // bool useHardware = (mode == "hw" || mode == "HW");
