@@ -304,6 +304,12 @@ SampleState &GetSampleState()
     static SampleState st;
     return st;
 }
+void ResetSampleState()
+{
+    auto &st = GetSampleState();
+    st.buffer.clear();
+    st.frameCounter = 0;
+}
 // Configuration constants
 constexpr size_t kInferInterval = 3; // every N frames trigger inference
 constexpr size_t kBatchImages = 3;   // max images per batch

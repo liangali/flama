@@ -7,27 +7,44 @@
 // �����н���ʵ��
 ParsedArgs parseArgs(int argc, char* argv[]) {
     ParsedArgs pa;
-    if (argc < 3) { pa.ok = false; return pa; }
-    pa.input = argv[1];
-    pa.mode = argv[2];
     pa.configPath = "config/config.json"; // default
-    // outDir ������������������Ŀ¼����Բ�����
-    if (argc >= 4 && argv[3] && argv[3][0] != '-') {
-        pa.outDir = argv[3];
-    }
-    else {
-        pa.outDir = ".";
-    }
-
+    int positional = 0;
     for (int i = 1; i < argc; ++i) {
         if (!argv[i]) continue;
         std::string a = argv[i];
+        if (!a.empty() && a[0] != '-') {
+            if (positional == 0) pa.input = a;
+            else if (positional == 1) pa.mode = a;
+            else if (positional == 2) pa.outDir = a;
+            positional++;
+            continue;
+        }
         if (a == "--config" && (i + 1) < argc && argv[i + 1] && argv[i + 1][0] != '-') {
             pa.configPath = argv[++i];
             continue;
         }
         else if (a.rfind("--config=", 0) == 0) {
             pa.configPath = a.substr(9);
+            continue;
+        }
+        if (a == "--video_dir" || a == "--video-dir") {
+            if ((i + 1) < argc && argv[i + 1] && argv[i + 1][0] != '-') {
+                pa.videoDir = argv[++i];
+            }
+            continue;
+        }
+        else if (a.rfind("--video_dir=", 0) == 0 || a.rfind("--video-dir=", 0) == 0) {
+            pa.videoDir = a.substr(a.find('=') + 1);
+            continue;
+        }
+        if (a == "--json_file" || a == "--json-file") {
+            if ((i + 1) < argc && argv[i + 1] && argv[i + 1][0] != '-') {
+                pa.jsonFile = argv[++i];
+            }
+            continue;
+        }
+        else if (a.rfind("--json_file=", 0) == 0 || a.rfind("--json-file=", 0) == 0) {
+            pa.jsonFile = a.substr(a.find('=') + 1);
             continue;
         }
         if (a == "--debug" || a == "-d" || a == "debug" || a == "DEBUG") {
@@ -163,32 +180,54 @@ ParsedArgs parseArgs(int argc, char* argv[]) {
             g_batchConfig.new_batch_mode = false;
         }
     }
+    if (pa.outDir.empty()) {
+        pa.outDir = ".";
+    }
+    pa.ok = (!pa.mode.empty() && (!pa.input.empty() || !pa.videoDir.empty()));
     return pa;
 }
 
 // ���ַ�����ʵ��
 ParsedArgsW parseArgsW(int argc, wchar_t* argv[]) {
     ParsedArgsW pa;
-    if (argc < 3) { pa.ok = false; return pa; }
-    pa.input = argv[1];
-    pa.mode = argv[2];
     pa.configPath = L"config/config.json"; // default
-    if (argc >= 4 && argv[3] && argv[3][0] != L'-') {
-        pa.outDir = argv[3];
-    }
-    else {
-        pa.outDir = L".";
-    }
-
+    int positional = 0;
     for (int i = 1; i < argc; ++i) {
         if (!argv[i]) continue;
         std::wstring a = argv[i];
+        if (!a.empty() && a[0] != L'-') {
+            if (positional == 0) pa.input = a;
+            else if (positional == 1) pa.mode = a;
+            else if (positional == 2) pa.outDir = a;
+            positional++;
+            continue;
+        }
         if (a == L"--config" && (i + 1) < argc && argv[i + 1] && argv[i + 1][0] != L'-') {
             pa.configPath = argv[++i];
             continue;
         }
         else if (a.rfind(L"--config=", 0) == 0) {
             pa.configPath = a.substr(9);
+            continue;
+        }
+        if (a == L"--video_dir" || a == L"--video-dir") {
+            if ((i + 1) < argc && argv[i + 1] && argv[i + 1][0] != L'-') {
+                pa.videoDir = argv[++i];
+            }
+            continue;
+        }
+        else if (a.rfind(L"--video_dir=", 0) == 0 || a.rfind(L"--video-dir=", 0) == 0) {
+            pa.videoDir = a.substr(a.find(L'=') + 1);
+            continue;
+        }
+        if (a == L"--json_file" || a == L"--json-file") {
+            if ((i + 1) < argc && argv[i + 1] && argv[i + 1][0] != L'-') {
+                pa.jsonFile = argv[++i];
+            }
+            continue;
+        }
+        else if (a.rfind(L"--json_file=", 0) == 0 || a.rfind(L"--json-file=", 0) == 0) {
+            pa.jsonFile = a.substr(a.find(L'=') + 1);
             continue;
         }
         if (a == L"--debug" || a == L"-d" || a == L"debug" || a == L"DEBUG") {
@@ -324,6 +363,10 @@ ParsedArgsW parseArgsW(int argc, wchar_t* argv[]) {
             g_batchConfig.new_batch_mode = false;
         }
     }
+    if (pa.outDir.empty()) {
+        pa.outDir = L".";
+    }
+    pa.ok = (!pa.mode.empty() && (!pa.input.empty() || !pa.videoDir.empty()));
     return pa;
 }
 

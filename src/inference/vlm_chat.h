@@ -91,3 +91,5 @@ void SetVLMResultFile(const std::string& path);
 void SetVLMResultFileW(const std::wstring& wpath);
 // Set input file name for inclusion in results CSV
 void SetVLMInputFile(const std::string& inputFile);
+// Reset internal sampling state for multi-video runs
+void ResetSampleState();

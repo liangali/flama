@@ -10,6 +10,8 @@ struct ParsedArgs {
     std::string outDir;
     std::string configPath; // path to JSON config for CB pipeline
     std::string prompt; // VLM prompt override
+    std::string videoDir; // directory with multiple videos
+    std::string jsonFile; // output JSON file path
     // Scheduler CLI overrides (optional)
     int max_num_seqs = -1; // >0 means set
     bool dynamic_split_fuse = true; // 0=false, 1=true, -1=unset
@@ -41,6 +43,8 @@ struct ParsedArgsW {
     std::wstring outDir;
     std::wstring configPath; // path to JSON config for CB pipeline
     std::wstring prompt; // VLM prompt override
+    std::wstring videoDir; // directory with multiple videos
+    std::wstring jsonFile; // output JSON file path
     // Scheduler CLI overrides (optional)
     int max_num_seqs = -1; // >0 means set
     bool dynamic_split_fuse = true; // 0=false, 1=true, -1=unset

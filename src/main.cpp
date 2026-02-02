@@ -10,9 +10,14 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cwctype>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <nlohmann/json.hpp>
 
 // Include C-style FFmpeg headers first
 extern "C"
@@ -277,6 +282,9 @@ struct BatchState
     uint64_t pipeline_us = 0;            // record pipeline start time from the first frame of this batch
     std::string prompt;                  // current batch prompt
     std::string result;                  // current batch result
+    double seg_start_sec = 0.0;          // segment start time in seconds
+    double seg_end_sec = 0.0;            // segment end time in seconds
+    bool seg_has_pts = false;            // whether segment timing has valid pts
     bool isHW = false;                   // true if using hardware path (D3D11VA)
     struct SwsContext *swsCtx = nullptr; // software scaling context, nullptr if not used
 
@@ -292,6 +300,9 @@ struct BatchState
         tensor_total_us = 0; // reset window counters
         inference_us = 0;
         pipeline_us = 0;
+        seg_start_sec = 0.0;
+        seg_end_sec = 0.0;
+        seg_has_pts = false;
     }
 };
 
@@ -309,8 +320,120 @@ struct CBInferenceParams {
     uint64_t scale_total_us = 0;
     uint64_t tensor_total_us = 0;
     uint64_t pipeline_us = 0;
+    double seg_start_sec = 0.0;
+    double seg_end_sec = 0.0;
+    bool seg_has_pts = false;
 };
 static std::vector<CBInferenceParams> g_cbInferenceQueue;
+
+struct VlmJsonSegment
+{
+    int seg_id = 0;
+    double seg_start = 0.0;
+    double seg_end = 0.0;
+    double seg_dur = 0.0;
+    std::string seg_desc;
+};
+
+struct VlmJsonVideo
+{
+    std::string input_video;
+    std::string prompt;
+    std::vector<VlmJsonSegment> segments;
+    int next_seg_id = 0;
+};
+
+class VlmJsonCollector
+{
+public:
+    void StartVideo(const std::string &input_video, const std::string &prompt)
+    {
+        std::lock_guard<std::mutex> lk(mutex_);
+        VlmJsonVideo v;
+        v.input_video = input_video;
+        v.prompt = prompt;
+        videos_.push_back(std::move(v));
+        current_index_ = videos_.empty() ? 0 : (videos_.size() - 1);
+    }
+
+    void AddSegment(double seg_start, double seg_end, const std::string &desc)
+    {
+        std::lock_guard<std::mutex> lk(mutex_);
+        if (videos_.empty())
+            return;
+        VlmJsonVideo &v = videos_[current_index_];
+        VlmJsonSegment s;
+        s.seg_id = v.next_seg_id++;
+        s.seg_start = seg_start;
+        s.seg_end = seg_end;
+        s.seg_dur = (seg_end >= seg_start) ? (seg_end - seg_start) : 0.0;
+        s.seg_desc = desc;
+        v.segments.push_back(std::move(s));
+    }
+
+    std::vector<VlmJsonVideo> Snapshot() const
+    {
+        std::lock_guard<std::mutex> lk(mutex_);
+        return videos_;
+    }
+
+    void Reset()
+    {
+        std::lock_guard<std::mutex> lk(mutex_);
+        videos_.clear();
+        current_index_ = 0;
+    }
+
+private:
+    mutable std::mutex mutex_;
+    std::vector<VlmJsonVideo> videos_;
+    size_t current_index_ = 0;
+};
+
+static VlmJsonCollector g_vlmJsonCollector;
+
+static double RoundTimeSec(double v)
+{
+    return std::round(v * 1000.0) / 1000.0;
+}
+
+static double GetFramePtsSeconds(const AVFrame *frame, AVRational time_base)
+{
+    if (!frame)
+        return 0.0;
+    int64_t pts = (frame->pts == AV_NOPTS_VALUE ? frame->best_effort_timestamp : frame->pts);
+    if (pts == AV_NOPTS_VALUE)
+        pts = 0;
+    return av_q2d(time_base) * static_cast<double>(pts);
+}
+
+static void UpdateBatchSegmentTiming(double pts_sec)
+{
+    if (!g_batchState.seg_has_pts)
+    {
+        g_batchState.seg_start_sec = pts_sec;
+        g_batchState.seg_end_sec = pts_sec;
+        g_batchState.seg_has_pts = true;
+        return;
+    }
+    if (pts_sec < g_batchState.seg_start_sec)
+        g_batchState.seg_start_sec = pts_sec;
+    if (pts_sec > g_batchState.seg_end_sec)
+        g_batchState.seg_end_sec = pts_sec;
+}
+
+static void RecordJsonSegmentFromTimes(double start_sec, double end_sec, const std::string &desc)
+{
+    g_vlmJsonCollector.AddSegment(RoundTimeSec(start_sec), RoundTimeSec(end_sec), desc);
+}
+
+static void RecordJsonSegmentFromBatch(const BatchState &bs, const std::string &desc)
+{
+    if (bs.seg_has_pts)
+        RecordJsonSegmentFromTimes(bs.seg_start_sec, bs.seg_end_sec, desc);
+    else
+        RecordJsonSegmentFromTimes(0.0, 0.0, desc);
+}
 
 // Scale one frame to target configured BGRA size (software path); returns newly allocated BGRA AVFrame* or nullptr.
 static AVFrame *ScaleFrameSW(AVFrame *src, int target_w, int target_h, struct SwsContext *&swsCtx)
@@ -533,6 +656,10 @@ static void StartNewCBProcThreadIfEnabled() {
                         req.pipeline_us,
                         req.prompt,
                         combined);
+                    if (req.seg_has_pts)
+                        RecordJsonSegmentFromTimes(req.seg_start_sec, req.seg_end_sec, combined);
+                    else
+                        RecordJsonSegmentFromTimes(0.0, 0.0, combined);
                 }
                 ++i;
             }
@@ -754,6 +881,10 @@ static void ProcessCBQueueAndReport()
                 req.pipeline_us,
                 req.prompt,
                 combined);
+            if (req.seg_has_pts)
+                RecordJsonSegmentFromTimes(req.seg_start_sec, req.seg_end_sec, combined);
+            else
+                RecordJsonSegmentFromTimes(0.0, 0.0, combined);
         }
         ++i;
         
@@ -829,6 +960,9 @@ static void RunBatchHW(/*bool use_cb*/)
                     params.scale_total_us = bs.scale_total_us;
                     params.tensor_total_us = bs.tensor_total_us;
                     params.pipeline_us = bs.pipeline_us;
+                    params.seg_start_sec = bs.seg_start_sec;
+                    params.seg_end_sec = bs.seg_end_sec;
+                    params.seg_has_pts = bs.seg_has_pts;
                     g_cbInferenceQueue.push_back(std::move(params));
                 }
                 else
@@ -1341,6 +1475,11 @@ void decode_frames_sw(AVFormatContext *format_context, AVCodecContext *codec_con
             AVFrame *srcForScale = selectedFrame; // legacy path variable
             frameProfiler.SetSelectionFlags(true, key, sceneCut);
             prof::Summary::Get().RecordFrame(true, key, sceneCut);
+            if (g_batchConfig.new_batch_mode)
+            {
+                double pts_sec = GetFramePtsSeconds(selectedFrame, time_base);
+                UpdateBatchSegmentTiming(pts_sec);
+            }
 
             // 首帧或变化日志
             if (frameCounter == 1)
@@ -1395,6 +1534,7 @@ void decode_frames_sw(AVFormatContext *format_context, AVCodecContext *codec_con
                     auto pipeline_end_us = std::chrono::steady_clock::now();
                     g_batchState.pipeline_us = std::chrono::duration_cast<std::chrono::microseconds>(pipeline_end_us - pipeline_start_us).count();
                     prof::BatchAggregator::Get().RecordBatch(g_batchState.windowDecoded, g_batchState.windowSelected, g_batchState.decode_total_us, g_batchState.scale_total_us, g_batchState.tensor_total_us, g_batchState.inference_us, g_batchState.pipeline_us, g_batchState.prompt, g_batchState.result);
+                    RecordJsonSegmentFromBatch(g_batchState, g_batchState.result);
                     DBG_LOGF("[Batch] idx=%llu frames=%zu decode_window=%llu selected_window=%llu scale_us=%llu tensor_us=%llu infer_us=%llu pipeline_us=%llu", (unsigned long long)g_batchState.batchIndex, g_batchState.cached_scaled.size(), (unsigned long long)g_batchState.windowDecoded, (unsigned long long)g_batchState.windowSelected, (unsigned long long)g_batchState.scale_total_us, (unsigned long long)g_batchState.tensor_total_us, (unsigned long long)g_batchState.inference_us, (unsigned long long)g_batchState.pipeline_us);
                     g_batchState.reset();
                     pipeline_start_us = std::chrono::steady_clock::now();
@@ -1474,6 +1614,11 @@ void decode_frames_sw(AVFormatContext *format_context, AVCodecContext *codec_con
         }
         frameProfiler.SetSelectionFlags(true, key, sceneCut);
         prof::Summary::Get().RecordFrame(true, key, sceneCut);
+        if (g_batchConfig.new_batch_mode)
+        {
+            double pts_sec = GetFramePtsSeconds(selectedFrame, format_context->streams[stream_index]->time_base);
+            UpdateBatchSegmentTiming(pts_sec);
+        }
         AVFrame *flushScaleSrc = selectedFrame;
         if (g_batchConfig.new_batch_mode)
         {
@@ -1530,6 +1675,7 @@ void decode_frames_sw(AVFormatContext *format_context, AVCodecContext *codec_con
         auto pipeline_end_us = std::chrono::steady_clock::now();
         g_batchState.pipeline_us = std::chrono::duration_cast<std::chrono::microseconds>(pipeline_end_us - pipeline_start_us).count();
         prof::BatchAggregator::Get().RecordBatch(g_batchState.windowDecoded, g_batchState.windowSelected, g_batchState.decode_total_us, g_batchState.scale_total_us, g_batchState.tensor_total_us, g_batchState.inference_us, g_batchState.pipeline_us, g_batchState.prompt, g_batchState.result);
+        RecordJsonSegmentFromBatch(g_batchState, g_batchState.result);
         DBG_LOGF("[Batch] idx=%llu frames=%zu decode_window=%llu selected_window=%llu scale_us=%llu tensor_us=%llu infer_us=%llu", (unsigned long long)g_batchState.batchIndex, g_batchState.cached_scaled.size(), (unsigned long long)g_batchState.windowDecoded, (unsigned long long)g_batchState.windowSelected, (unsigned long long)g_batchState.scale_total_us, (unsigned long long)g_batchState.tensor_total_us, (unsigned long long)g_batchState.inference_us);
         g_batchState.reset();
         pipeline_start_us = std::chrono::steady_clock::now();
@@ -1626,6 +1772,11 @@ void decode_frames(AVFormatContext *format_context,
                 }
                 AVFrame *srcForVPP = selectedFrame;
                 frameProfiler.SetSelectionFlags(true, key, sceneCut);
+                if (g_batchConfig.new_batch_mode)
+                {
+                    double pts_sec = GetFramePtsSeconds(selectedFrame, time_base);
+                    UpdateBatchSegmentTiming(pts_sec);
+                }
 
                /* if (infoLogCount < 10)
                 {
@@ -1769,6 +1920,7 @@ void decode_frames(AVFormatContext *format_context,
                                             auto pipeline_end_us = std::chrono::steady_clock::now();
                                             g_batchState.pipeline_us = std::chrono::duration_cast<std::chrono::microseconds>(pipeline_end_us - pipeline_start_us).count();
                                             prof::BatchAggregator::Get().RecordBatch(g_batchState.windowDecoded, g_batchState.windowSelected, g_batchState.decode_total_us, g_batchState.scale_total_us, g_batchState.tensor_total_us, g_batchState.inference_us, g_batchState.pipeline_us, g_batchState.prompt, g_batchState.result);
+                                            RecordJsonSegmentFromBatch(g_batchState, g_batchState.result);
                                             DBG_LOGF("[Batch] idx=%llu frames=%zu decode_window=%llu selected_window=%llu scale_us=%llu tensor_us=%llu infer_us=%llu", (unsigned long long)g_batchState.batchIndex, g_batchState.cached_textures.size(), (unsigned long long)g_batchState.windowDecoded, (unsigned long long)g_batchState.windowSelected, (unsigned long long)g_batchState.scale_total_us, (unsigned long long)g_batchState.tensor_total_us, (unsigned long long)g_batchState.inference_us);
                                             g_batchState.reset();
                                             pipeline_start_us = std::chrono::steady_clock::now();
@@ -1968,6 +2120,8 @@ void decode_frames(AVFormatContext *format_context,
         auto pipeline_end_us = std::chrono::steady_clock::now();
         g_batchState.pipeline_us = std::chrono::duration_cast<std::chrono::microseconds>(pipeline_end_us - pipeline_start_us).count();
         prof::BatchAggregator::Get().RecordBatch(g_batchState.windowDecoded, g_batchState.windowSelected, g_batchState.decode_total_us, g_batchState.scale_total_us, g_batchState.tensor_total_us, g_batchState.inference_us, g_batchState.pipeline_us, g_batchState.prompt, g_batchState.result);
+        if (!g_commonConfig.use_cb)
+            RecordJsonSegmentFromBatch(g_batchState, g_batchState.result);
         DBG_LOGF("[Batch] idx=%llu frames=%zu decode_window=%llu selected_window=%llu scale_us=%llu tensor_us=%llu infer_us=%llu", (unsigned long long)g_batchState.batchIndex, g_batchState.cached_scaled.size(), (unsigned long long)g_batchState.windowDecoded, (unsigned long long)g_batchState.windowSelected, (unsigned long long)g_batchState.scale_total_us, (unsigned long long)g_batchState.tensor_total_us, (unsigned long long)g_batchState.inference_us);
         g_batchState.reset();
         pipeline_start_us = std::chrono::steady_clock::now();
@@ -2111,6 +2265,93 @@ std::wstring ExtractFilenameWithoutExt(const std::wstring &fullPath)
     return std::wstring(fname);
 }
 
+static std::string ToLowerAscii(std::string s)
+{
+    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return s;
+}
+
+static std::wstring ToLowerWide(std::wstring s)
+{
+    std::transform(s.begin(), s.end(), s.begin(), [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
+    return s;
+}
+
+static bool IsVideoExtension(const std::filesystem::path &p)
+{
+    if (!p.has_extension())
+        return false;
+#ifdef _WIN32
+    std::wstring ext = ToLowerWide(p.extension().wstring());
+    return ext == L".mp4" || ext == L".mkv" || ext == L".avi" || ext == L".mov" || ext == L".wmv" || ext == L".flv" || ext == L".webm" || ext == L".m4v";
+#else
+    std::string ext = ToLowerAscii(p.extension().string());
+    return ext == ".mp4" || ext == ".mkv" || ext == ".avi" || ext == ".mov" || ext == ".wmv" || ext == ".flv" || ext == ".webm" || ext == ".m4v";
+#endif
+}
+
+static std::vector<std::filesystem::path> CollectVideoFiles(const std::filesystem::path &dir)
+{
+    std::vector<std::filesystem::path> files;
+    try
+    {
+        if (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir))
+            return files;
+        for (const auto &entry : std::filesystem::directory_iterator(dir))
+        {
+            if (!entry.is_regular_file())
+                continue;
+            const auto &p = entry.path();
+            if (IsVideoExtension(p))
+                files.push_back(p);
+        }
+    }
+    catch (const std::exception &)
+    {
+        return files;
+    }
+    std::sort(files.begin(), files.end(), [](const std::filesystem::path &a, const std::filesystem::path &b) {
+#ifdef _WIN32
+        return ToLowerWide(a.filename().wstring()) < ToLowerWide(b.filename().wstring());
+#else
+        return ToLowerAscii(a.filename().string()) < ToLowerAscii(b.filename().string());
+#endif
+    });
+    return files;
+}
+
+static bool WriteVlmJsonFile(const std::filesystem::path &outPath, const std::vector<VlmJsonVideo> &videos)
+{
+    nlohmann::json j;
+    j["processed_videos"] = nlohmann::json::array();
+    for (const auto &video : videos)
+    {
+        nlohmann::json v;
+        v["input_video"] = video.input_video;
+        v["prompt"] = video.prompt;
+        v["segments"] = nlohmann::json::array();
+        for (const auto &seg : video.segments)
+        {
+            nlohmann::json s;
+            s["seg_id"] = seg.seg_id;
+            s["seg_start"] = seg.seg_start;
+            s["seg_end"] = seg.seg_end;
+            s["seg_dur"] = seg.seg_dur;
+            s["seg_desc"] = seg.seg_desc;
+            v["segments"].push_back(std::move(s));
+        }
+        j["processed_videos"].push_back(std::move(v));
+    }
+    std::ofstream out(outPath, std::ios::binary | std::ios::trunc);
+    if (!out.is_open())
+    {
+        std::cerr << "[JSON] Failed to open output file: " << outPath.string() << std::endl;
+        return false;
+    }
+    out << j.dump(2);
+    return true;
+}
+
 int main(int argc, char *argv[])
 {
     SetConsoleOutputCP(CP_UTF8);
@@ -2164,14 +2405,31 @@ int main(int argc, char *argv[])
             pa.cb_batch_size = paw.cb_batch_size;
             pa.input = WideToUtf8(paw.input); // FFmpeg expects UTF-8
             pa.mode = WideToUtf8(paw.mode);
+            pa.prompt = WideToUtf8(paw.prompt);
             // outDir as wide path; build outputs later with wide
             // store UTF-8 for fallback uses; we'll keep wide separately below
             pa.outDir = WideToUtf8(paw.outDir);
             pa.configPath = WideToUtf8(paw.configPath);
+            pa.videoDir = WideToUtf8(paw.videoDir);
+            pa.jsonFile = WideToUtf8(paw.jsonFile);
         }
         else
         {
             pa = parseArgs(argc, argv);
+            if (!paw.videoDir.empty())
+                pa.videoDir = WideToUtf8(paw.videoDir);
+            if (!paw.jsonFile.empty())
+                pa.jsonFile = WideToUtf8(paw.jsonFile);
+            if (!paw.input.empty() && pa.input.empty())
+                pa.input = WideToUtf8(paw.input);
+            if (!paw.mode.empty() && pa.mode.empty())
+                pa.mode = WideToUtf8(paw.mode);
+            if (!paw.outDir.empty() && pa.outDir.empty())
+                pa.outDir = WideToUtf8(paw.outDir);
+            if (!paw.prompt.empty() && pa.prompt.empty())
+                pa.prompt = WideToUtf8(paw.prompt);
+            if (!paw.configPath.empty() && pa.configPath.empty())
+                pa.configPath = WideToUtf8(paw.configPath);
         }
         LocalFree(wargv);
     }
@@ -2231,15 +2489,20 @@ int main(int argc, char *argv[])
     pa = parseArgs(argc, argv);
 #endif
     // If CLI parsing failed, try composing required fields from config
+    bool hasVideoDir = (!pa.videoDir.empty() || !paw.videoDir.empty());
     if (!pa.ok)
     {
-        if (cfg.commonCfg.input && cfg.commonCfg.mode) {
-            pa.input = cfg.commonCfg.input.value();
+        if (cfg.commonCfg.mode) {
             pa.mode = cfg.commonCfg.mode.value();
-            pa.outDir = cfg.commonCfg.out_dir.value_or(".");
-            if (cfg.batch.cb_batch_size) pa.cb_batch_size = std::max(0, cfg.batch.cb_batch_size.value());
-            pa.ok = true;
         }
+        if (cfg.commonCfg.input && pa.input.empty() && !hasVideoDir) {
+            pa.input = cfg.commonCfg.input.value();
+        }
+        if (cfg.commonCfg.out_dir) {
+            pa.outDir = cfg.commonCfg.out_dir.value();
+        }
+        if (cfg.batch.cb_batch_size) pa.cb_batch_size = std::max(0, cfg.batch.cb_batch_size.value());
+        pa.ok = (!pa.mode.empty() && (!pa.input.empty() || hasVideoDir));
     }
     if (!pa.ok)
     {
@@ -2249,6 +2512,8 @@ int main(int argc, char *argv[])
                   << "  --min-frames-between=N --min-seconds-between=S \n"
                   << "  --max-cached=N [--keep-cache] [--debug] \n"
                   << "  --config=PATH_TO_JSON \n"
+                  << "  --video_dir=PATH_TO_VIDEO_DIR \n"
+                  << "  --json_file=PATH_TO_OUTPUT_JSON \n"
                   << "  --max_num_seqs=N \n"
                   << "  --dynamic_split_fuse=true|false" << std::endl;
         return 1;
@@ -2281,10 +2546,8 @@ int main(int argc, char *argv[])
     LogCommonConfig(g_commonConfig);
     LogVLMConfig(g_vlmConfig);
     std::cout << "Log g_fsConfig/g_batchConfig/g_commonConfig/g_vlmConfig end" << std::endl;
+    g_vlmJsonCollector.Reset();
     // Compose runtime params from cfg (already overridden by CLI)
-    std::string input_file = g_commonConfig.input_video_path;
-    //g_commonConfig.hw_decode
-   // std::string mode = cfg.commonCfg.mode.value_or(!pa.mode.empty() ? pa.mode : std::string("hw"));
     std::string outDir = g_commonConfig.log_path;
 #ifdef _WIN32
     // Preserve a wide outDir for output file construction
@@ -2334,155 +2597,241 @@ int main(int argc, char *argv[])
 
     init_ffmpeg();
 
-    AVFormatContext *format_context = nullptr;
-    if (avformat_open_input(&format_context, input_file.c_str(), nullptr, nullptr) < 0)
-    {
-        std::cerr << "Failed to open input file: " << input_file << std::endl;
-        return 1;
-    }
+    std::filesystem::path jsonOutPath;
+#ifdef _WIN32
+    if (!paw.jsonFile.empty())
+        jsonOutPath = std::filesystem::path(paw.jsonFile);
+    else if (!pa.jsonFile.empty())
+        jsonOutPath = std::filesystem::path(Utf8ToWide(pa.jsonFile));
+    else
+        jsonOutPath = std::filesystem::current_path() / "output_vlm.json";
+#else
+    if (!pa.jsonFile.empty())
+        jsonOutPath = std::filesystem::path(pa.jsonFile);
+    else
+        jsonOutPath = std::filesystem::current_path() / "output_vlm.json";
+#endif
 
-    std::cout << "成功打开文件： "<< input_file<< " 文件格式名称: " << format_context->iformat->name << std::endl;
-
-    if (avformat_find_stream_info(format_context, nullptr) < 0)
+    std::vector<std::filesystem::path> inputVideos;
+#ifdef _WIN32
+    if (!paw.videoDir.empty() || !pa.videoDir.empty())
     {
-        std::cerr << "Failed to find stream information." << std::endl;
-        avformat_close_input(&format_context);
-        return 1;
-    }
-
-    int stream_index = find_video_stream(format_context);
-    if (stream_index < 0)
-    {
-        std::cerr << "No video stream found." << std::endl;
-        avformat_close_input(&format_context);
-        return 1;
-    }
-
-    // Derive width/height and simple codec string (avc/hevc)
-    int srcW = 0, srcH = 0;
-    std::wstring codecSimple = L"";
-    if (format_context && stream_index >= 0)
-    {
-        AVCodecParameters *codec_params = format_context->streams[stream_index]->codecpar;
-        srcW = codec_params->width;
-        srcH = codec_params->height;
-        switch (codec_params->codec_id)
+        std::filesystem::path videoDirPath = !paw.videoDir.empty() ? std::filesystem::path(paw.videoDir)
+                                                                   : std::filesystem::path(Utf8ToWide(pa.videoDir));
+        inputVideos = CollectVideoFiles(videoDirPath);
+        if (inputVideos.empty())
         {
-        case AV_CODEC_ID_H264:
-            codecSimple = L"avc";
-            break;
-        case AV_CODEC_ID_HEVC:
-            codecSimple = L"hevc";
-            break;
-        default:
-            codecSimple = L"unknown";
-            break;
-        }
-    }
-
-    // Use input clip name as prefix for dump files
-    // std::filesystem::path inputPath(input_file);
-    // std::string clipName = inputPath.stem().string();
-    std::filesystem::path inputPath(paw.input);
-    std::string clipName = inputPath.stem().string();
-    std::wstring filename_w = ExtractFilenameWithoutExt(paw.input);
-#ifdef _WIN32
-
-    std::filesystem::path outBaseW = std::filesystem::path(outDirW.empty() ? Utf8ToWide(outDir) : outDirW);
-    std::filesystem::path profPathW = outBaseW / (filename_w + L"_profile_" + (useSoftware ? L"sw" : L"hw") + L".csv");
-    std::filesystem::path resultPathW = outBaseW / (filename_w + L"_results_" + (useSoftware ? L"sw" : L"hw") + L".csv");
-    std::filesystem::path batchPathW = outBaseW / (filename_w + L"_batch_" + (useSoftware ? L"sw" : L"hw") + L".csv");
-#else
-    std::string profFile = outDir + std::string("/") + clipName + std::string("_profile_") + (useSoftware ? "sw" : "hw") + ".csv";
-    std::string resultFile = outDir + std::string("/") + clipName + std::string("_results_") + (useSoftware ? "sw" : "hw") + ".csv";
-    std::string batchFile = outDir + std::string("/") + clipName + std::string("_batch_") + (useSoftware ? "sw" : "hw") + ".csv";
-#endif
-
-    // Recompute output file names to include clip dimensions and codec info
-    if (srcW > 0 && srcH > 0)
-    {
-
-#ifdef _WIN32
-        std::wstring suffix = L"_" + codecSimple + L"_" + std::to_wstring(srcW) + L"x" + std::to_wstring(srcH);
-        profPathW = outBaseW / ((filename_w + suffix + L"_profile_" + (useSoftware ? L"sw" : L"hw")) + L".csv");
-        resultPathW = outBaseW / ((filename_w + suffix + L"_results_" + (useSoftware ? L"sw" : L"hw")) + L".csv");
-        batchPathW = outBaseW / ((filename_w + suffix + L"_batch_" + (useSoftware ? L"sw" : L"hw")) + L".csv");
-#else
-        std::string suffix = std::string("_") + codecSimple + "_" + std::to_string(srcW) + "x" + std::to_string(srcH);
-        profFile = outDir + std::string("/") + clipName + suffix + std::string("_profile_") + (useSoftware ? "sw" : "hw") + ".csv";
-        resultFile = outDir + std::string("/") + clipName + suffix + std::string("_results_") + (useSoftware ? "sw" : "hw") + ".csv";
-        batchFile = outDir + std::string("/") + clipName + suffix + std::string("_batch_") + (useSoftware ? "sw" : "hw") + ".csv";
-#endif
-    }
-#ifdef _WIN32
-    prof::FrameProfiler::SetOutputFileW(profPathW.wstring());
-    DBG_LOG(std::string("[PROF] Output -> ") + WideToUtf8(profPathW.wstring()));
-    SetVLMResultFileW(resultPathW.wstring());
-    prof::BatchAggregator::Get().SetOutputFileW(batchPathW.wstring());
-    DBG_LOG(std::string("[BATCH] Output -> ") + WideToUtf8(batchPathW.wstring()));
-#else
-    prof::FrameProfiler::SetOutputFile(profFile); // 单例逐帧日志与累计日志同路径
-    DBG_LOG(std::string("[PROF] Output -> ") + profFile);
-    SetVLMResultFile(resultFile);
-    prof::BatchAggregator::Get().SetOutputFile(batchFile);
-    DBG_LOG(std::string("[BATCH] Output -> ") + batchFile);
-#endif
-    // (debug 已通过 parseArgs 设置)
-    SetVLMInputFile(input_file);
-
-    // useSoftware 已通过参数决定
-    AVCodecContext *codec_context = nullptr;
-    if (useSoftware)
-    {
-        DBG_LOG("[Main] Using software decoding path.");
-        codec_context = open_decoder_sw(format_context, stream_index);
-        if (!codec_context)
-        {
-            avformat_close_input(&format_context);
+            std::cerr << "[Input] No video files found in: " << WideToUtf8(videoDirPath.wstring()) << std::endl;
             return 1;
         }
-        auto decode_start = std::chrono::high_resolution_clock::now();
-        // Reset SW totals before run
-        g_sw_inference_total_us = 0;
-        g_sw_pipeline_total_us = 0;
-        decode_frames_sw(format_context, codec_context, stream_index);
-        auto decode_end = std::chrono::high_resolution_clock::now();
-
-        std::cout << "total time of entire pipeline: " << std::chrono::duration_cast<std::chrono::milliseconds>(decode_end - decode_start).count() << " ms" << std::endl;
-        // Report SW aggregated totals
-        std::cout << "[SW] total inference time: " << (g_sw_inference_total_us / 1000) << " ms" << std::endl;
-        std::cout << "[SW] total decode_frames_sw time: " << (g_sw_pipeline_total_us / 1000) << " ms" << std::endl;
     }
     else
     {
-        DBG_LOG(std::string("[Main] Using hardware decoding path: ") + hw_device_type);
-        codec_context = open_decoder(format_context, stream_index, hw_device_type);
-        if (!codec_context)
+        std::wstring singleInputW;
+        if (!paw.input.empty())
+            singleInputW = paw.input;
+        else if (!pa.input.empty())
+            singleInputW = Utf8ToWide(pa.input);
+        else
+            singleInputW = Utf8ToWide(g_commonConfig.input_video_path);
+        std::filesystem::path singlePath(singleInputW);
+        inputVideos.push_back(singlePath);
+    }
+#else
+    if (!pa.videoDir.empty())
+    {
+        inputVideos = CollectVideoFiles(std::filesystem::path(pa.videoDir));
+        if (inputVideos.empty())
         {
-            avformat_close_input(&format_context);
+            std::cerr << "[Input] No video files found in: " << pa.videoDir << std::endl;
             return 1;
         }
-        auto decode_start = std::chrono::high_resolution_clock::now();
-        // Reset HW totals before run
+    }
+    else
+    {
+        std::filesystem::path singlePath = !pa.input.empty() ? std::filesystem::path(pa.input)
+                                                             : std::filesystem::path(g_commonConfig.input_video_path);
+        inputVideos.push_back(singlePath);
+    }
+#endif
+
+    bool all_ok = true;
+    for (const auto &rawPath : inputVideos)
+    {
+        std::filesystem::path inputPath = std::filesystem::absolute(rawPath);
+#ifdef _WIN32
+        std::wstring inputPathW = inputPath.wstring();
+        std::string input_file = WideToUtf8(inputPathW);
+#else
+        std::string input_file = inputPath.string();
+#endif
+        g_commonConfig.input_video_path = input_file;
+        SetVLMInputFile(input_file);
+
+        g_batchState.reset();
+        g_batchState.batchIndex = 0;
+        g_cbInferenceQueue.clear();
+        g_cb_pending_batches = 0;
+        g_cb_enqueued_batches = 0;
+        cb_timer = true;
+        report_idx = 0;
+        g_cb_stop.store(false);
+        g_sw_inference_total_us = 0;
+        g_sw_pipeline_total_us = 0;
         g_hw_inference_total_us = 0;
         g_hw_pipeline_total_us = 0;
-        decode_frames(format_context, codec_context, stream_index);
-        auto decode_end = std::chrono::high_resolution_clock::now();
+        ResetSampleState();
 
-      //  std::cout << "total time of entire pipeline: " << std::chrono::duration_cast<std::chrono::milliseconds>(decode_end - decode_start).count() << " ms" << std::endl;
-        // Report HW aggregated totals
-        std::cout << "[HW] total inference time: " << (g_hw_inference_total_us / 1000) << " ms" << std::endl;
-        std::cout << "[HW] total decode_frames time: " << (g_hw_pipeline_total_us / 1000) << " ms" << std::endl;
+        AVFormatContext *format_context = nullptr;
+        if (avformat_open_input(&format_context, input_file.c_str(), nullptr, nullptr) < 0)
+        {
+            std::cerr << "Failed to open input file: " << input_file << std::endl;
+            all_ok = false;
+            continue;
+        }
+
+        std::cout << "成功打开文件： " << input_file << " 文件格式名称: " << format_context->iformat->name << std::endl;
+
+        if (avformat_find_stream_info(format_context, nullptr) < 0)
+        {
+            std::cerr << "Failed to find stream information." << std::endl;
+            avformat_close_input(&format_context);
+            all_ok = false;
+            continue;
+        }
+
+        int stream_index = find_video_stream(format_context);
+        if (stream_index < 0)
+        {
+            std::cerr << "No video stream found." << std::endl;
+            avformat_close_input(&format_context);
+            all_ok = false;
+            continue;
+        }
+        g_vlmJsonCollector.StartVideo(input_file, g_commonConfig.prompt_video);
+
+        // Derive width/height and simple codec string (avc/hevc)
+        int srcW = 0, srcH = 0;
+        std::wstring codecSimple = L"";
+        if (format_context && stream_index >= 0)
+        {
+            AVCodecParameters *codec_params = format_context->streams[stream_index]->codecpar;
+            srcW = codec_params->width;
+            srcH = codec_params->height;
+            switch (codec_params->codec_id)
+            {
+            case AV_CODEC_ID_H264:
+                codecSimple = L"avc";
+                break;
+            case AV_CODEC_ID_HEVC:
+                codecSimple = L"hevc";
+                break;
+            default:
+                codecSimple = L"unknown";
+                break;
+            }
+        }
+
+        // Use input clip name as prefix for dump files
+        std::string clipName = inputPath.stem().string();
+#ifdef _WIN32
+        std::wstring filename_w = ExtractFilenameWithoutExt(inputPathW);
+        std::filesystem::path outBaseW = std::filesystem::path(outDirW.empty() ? Utf8ToWide(outDir) : outDirW);
+        std::filesystem::path profPathW = outBaseW / (filename_w + L"_profile_" + (useSoftware ? L"sw" : L"hw") + L".csv");
+        std::filesystem::path resultPathW = outBaseW / (filename_w + L"_results_" + (useSoftware ? L"sw" : L"hw") + L".csv");
+        std::filesystem::path batchPathW = outBaseW / (filename_w + L"_batch_" + (useSoftware ? L"sw" : L"hw") + L".csv");
+#else
+        std::string profFile = outDir + std::string("/") + clipName + std::string("_profile_") + (useSoftware ? "sw" : "hw") + ".csv";
+        std::string resultFile = outDir + std::string("/") + clipName + std::string("_results_") + (useSoftware ? "sw" : "hw") + ".csv";
+        std::string batchFile = outDir + std::string("/") + clipName + std::string("_batch_") + (useSoftware ? "sw" : "hw") + ".csv";
+#endif
+
+        // Recompute output file names to include clip dimensions and codec info
+        if (srcW > 0 && srcH > 0)
+        {
+#ifdef _WIN32
+            std::wstring suffix = L"_" + codecSimple + L"_" + std::to_wstring(srcW) + L"x" + std::to_wstring(srcH);
+            profPathW = outBaseW / ((filename_w + suffix + L"_profile_" + (useSoftware ? L"sw" : L"hw")) + L".csv");
+            resultPathW = outBaseW / ((filename_w + suffix + L"_results_" + (useSoftware ? L"sw" : L"hw")) + L".csv");
+            batchPathW = outBaseW / ((filename_w + suffix + L"_batch_" + (useSoftware ? L"sw" : L"hw")) + L".csv");
+#else
+            std::string suffix = std::string("_") + WideToUtf8(codecSimple) + "_" + std::to_string(srcW) + "x" + std::to_string(srcH);
+            profFile = outDir + std::string("/") + clipName + suffix + std::string("_profile_") + (useSoftware ? "sw" : "hw") + ".csv";
+            resultFile = outDir + std::string("/") + clipName + suffix + std::string("_results_") + (useSoftware ? "sw" : "hw") + ".csv";
+            batchFile = outDir + std::string("/") + clipName + suffix + std::string("_batch_") + (useSoftware ? "sw" : "hw") + ".csv";
+#endif
+        }
+#ifdef _WIN32
+        prof::FrameProfiler::SetOutputFileW(profPathW.wstring());
+        DBG_LOG(std::string("[PROF] Output -> ") + WideToUtf8(profPathW.wstring()));
+        SetVLMResultFileW(resultPathW.wstring());
+        prof::BatchAggregator::Get().SetOutputFileW(batchPathW.wstring());
+        DBG_LOG(std::string("[BATCH] Output -> ") + WideToUtf8(batchPathW.wstring()));
+#else
+        prof::FrameProfiler::SetOutputFile(profFile); // 单例逐帧日志与累计日志同路径
+        DBG_LOG(std::string("[PROF] Output -> ") + profFile);
+        SetVLMResultFile(resultFile);
+        prof::BatchAggregator::Get().SetOutputFile(batchFile);
+        DBG_LOG(std::string("[BATCH] Output -> ") + batchFile);
+#endif
+
+        AVCodecContext *codec_context = nullptr;
+        if (useSoftware)
+        {
+            DBG_LOG("[Main] Using software decoding path.");
+            codec_context = open_decoder_sw(format_context, stream_index);
+            if (!codec_context)
+            {
+                avformat_close_input(&format_context);
+                all_ok = false;
+                continue;
+            }
+            auto decode_start = std::chrono::high_resolution_clock::now();
+            decode_frames_sw(format_context, codec_context, stream_index);
+            auto decode_end = std::chrono::high_resolution_clock::now();
+
+            std::cout << "total time of entire pipeline: " << std::chrono::duration_cast<std::chrono::milliseconds>(decode_end - decode_start).count() << " ms" << std::endl;
+            std::cout << "[SW] total inference time: " << (g_sw_inference_total_us / 1000) << " ms" << std::endl;
+            std::cout << "[SW] total decode_frames_sw time: " << (g_sw_pipeline_total_us / 1000) << " ms" << std::endl;
+        }
+        else
+        {
+            DBG_LOG(std::string("[Main] Using hardware decoding path: ") + hw_device_type);
+            codec_context = open_decoder(format_context, stream_index, hw_device_type);
+            if (!codec_context)
+            {
+                avformat_close_input(&format_context);
+                all_ok = false;
+                continue;
+            }
+            auto decode_start = std::chrono::high_resolution_clock::now();
+            decode_frames(format_context, codec_context, stream_index);
+            auto decode_end = std::chrono::high_resolution_clock::now();
+
+            std::cout << "[HW] total inference time: " << (g_hw_inference_total_us / 1000) << " ms" << std::endl;
+            std::cout << "[HW] total decode_frames time: " << (g_hw_pipeline_total_us / 1000) << " ms" << std::endl;
+        }
+
+        cleanup(format_context, codec_context);
+
+        DBG_LOG("[VLM] Result file finalized.");
+
+        prof::Summary::Get().PrintSummary();
     }
 
-    cleanup(format_context, codec_context);
+    try
+    {
+        if (jsonOutPath.has_parent_path())
+            std::filesystem::create_directories(jsonOutPath.parent_path());
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "[JSON] Failed to create output directory: " << e.what() << std::endl;
+    }
+    if (!WriteVlmJsonFile(jsonOutPath, g_vlmJsonCollector.Snapshot()))
+        all_ok = false;
 
-    DBG_LOG("[VLM] Result file finalized.");
-
-    // Print global summary
-    prof::Summary::Get().PrintSummary();
-
-    return 0;
+    return all_ok ? 0 : 1;
 }
 
 
