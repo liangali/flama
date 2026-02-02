@@ -108,6 +108,8 @@ namespace
 
 void SetVLMResultFile(const std::string &path)
 {
+    if (!prof::FrameProfiler::IsCsvEnabled())
+        return;
     ResultState& st = GetResultState();
     ResultLockGuard lk(st.mutex);
     st.file.reset();
@@ -124,6 +126,8 @@ void SetVLMResultFile(const std::string &path)
 
 void SetVLMResultFileW(const std::wstring &wpath)
 {
+    if (!prof::FrameProfiler::IsCsvEnabled())
+        return;
     ResultState& st = GetResultState();
     ResultLockGuard lk(st.mutex);
     st.file.reset();

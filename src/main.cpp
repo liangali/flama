@@ -2285,6 +2285,8 @@ int main(int argc, char *argv[])
         return 0;
     if (!FinalizeParsedArgs(pa, paw, cfg, argv && argv[0] ? argv[0] : nullptr))
         return 1;
+    bool csvEnabled = pa.debug;
+    prof::FrameProfiler::SetCsvEnabled(csvEnabled);
     if (pa.debug || std::getenv("VLM_DEBUG"))
     {
         g_commonConfig.debug = true;
@@ -2489,18 +2491,18 @@ int main(int argc, char *argv[])
 #endif
         }
 #ifdef _WIN32
-        SetVLMResultFileW(resultPathW.wstring());
-        if (g_commonConfig.debug)
+        if (csvEnabled)
         {
+            SetVLMResultFileW(resultPathW.wstring());
             prof::FrameProfiler::SetOutputFileW(profPathW.wstring());
             DBG_LOG(std::string("[PROF] Output -> ") + WideToUtf8(profPathW.wstring()));
             prof::BatchAggregator::Get().SetOutputFileW(batchPathW.wstring());
             DBG_LOG(std::string("[BATCH] Output -> ") + WideToUtf8(batchPathW.wstring()));
         }
 #else
-        SetVLMResultFile(resultFile);
-        if (g_commonConfig.debug)
+        if (csvEnabled)
         {
+            SetVLMResultFile(resultFile);
             prof::FrameProfiler::SetOutputFile(profFile);
             DBG_LOG(std::string("[PROF] Output -> ") + profFile);
             prof::BatchAggregator::Get().SetOutputFile(batchFile);

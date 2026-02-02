@@ -54,6 +54,8 @@ namespace prof
             return inst;
         }
         static FrameProfiler &Get() { return Instance(); }
+        static void SetCsvEnabled(bool enabled);
+        static bool IsCsvEnabled();
 
         void Reset() { std::memset(&cur_, 0, sizeof(cur_)); }
         void BeginFrame(uint64_t idx)
@@ -85,6 +87,11 @@ namespace prof
         {
             static bool w = false;
             return w;
+        }
+        static bool &csvEnabled()
+        {
+            static bool e = false;
+            return e;
         }
         static uint64_t now_us()
         {
@@ -189,6 +196,11 @@ namespace prof
         }
         void openFile(const std::filesystem::path &p)
         {
+            if (!FrameProfiler::IsCsvEnabled())
+            {
+                batchFile_.reset();
+                return;
+            }
             batchFile_.reset();
             bool needHeader = false;
             std::ifstream test(p);
@@ -253,6 +265,12 @@ namespace prof
     // ---- Inline method implementations that depend on class layout ----
     inline void FrameProfiler::SetOutputFile(const std::string &path)
     {
+        if (!IsCsvEnabled())
+        {
+            file().reset();
+            headerWritten() = false;
+            return;
+        }
         file().reset();
         bool needBOM = false;
         std::ifstream test(path, std::ios::binary);
@@ -275,6 +293,12 @@ namespace prof
     }
     inline void FrameProfiler::SetOutputFileW(const std::wstring &wpath)
     {
+        if (!IsCsvEnabled())
+        {
+            file().reset();
+            headerWritten() = false;
+            return;
+        }
         std::filesystem::path p(wpath);
         file().reset();
         bool needBOM = false;
@@ -333,6 +357,21 @@ namespace prof
             cur_.tensor_total_us += sDur;
             cur_.inference_us += iDur;
         }
+    }
+
+    inline void FrameProfiler::SetCsvEnabled(bool enabled)
+    {
+        csvEnabled() = enabled;
+        if (!enabled)
+        {
+            file().reset();
+            headerWritten() = false;
+        }
+    }
+
+    inline bool FrameProfiler::IsCsvEnabled()
+    {
+        return csvEnabled();
     }
 
 } // namespace prof
