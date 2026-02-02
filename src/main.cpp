@@ -2121,6 +2121,13 @@ int main(int argc, char *argv[])
     ParsedArgs pa{};
     ParsedArgsW paw{};
 #ifdef _WIN32
+    auto getExeDirW = []() -> std::wstring {
+        wchar_t buf[MAX_PATH];
+        DWORD len = GetModuleFileNameW(nullptr, buf, MAX_PATH);
+        if (len == 0 || len == MAX_PATH) return L".";
+        std::filesystem::path p(buf);
+        return p.parent_path().wstring();
+    };
     int wargc = 0;
     wchar_t **wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
     if (wargv && wargc > 0)
@@ -2128,12 +2135,26 @@ int main(int argc, char *argv[])
         // Pre-scan for --config to load JSON defaults
         for (int i = 0; i < wargc; ++i) {
             std::wstring a = wargv[i];
-            if (a.rfind(L"--config=", 0) == 0) {
+            if (a == L"--config" && (i + 1) < wargc && wargv[i + 1] && wargv[i + 1][0] != L'-') {
+                configPathW = wargv[++i];
+            }
+            else if (a.rfind(L"--config=", 0) == 0) {
                 configPathW = a.substr(9);
             }
         }
-        if (configPathW.empty()) configPathW = L"config/config.json";
-        if (LoadJSONConfigW(configPathW, cfg, cfgErr)) { ApplyConfig(cfg); haveCfg = true; }
+        if (configPathW.empty()) {
+            std::filesystem::path p(getExeDirW());
+            p /= L"config.json";
+            configPathW = p.wstring();
+        }
+        if (LoadJSONConfigW(configPathW, cfg, cfgErr)) {
+            ApplyConfig(cfg);
+            haveCfg = true;
+        } else {
+            std::wcerr << L"[Config] Failed to load config: " << configPathW << L" (" << Utf8ToWide(cfgErr) << L")" << std::endl;
+            LocalFree(wargv);
+            return 1;
+        }
         /*ParsedArgsW*/ paw = parseArgsW(wargc, wargv);
         if (paw.ok)
         {
@@ -2159,20 +2180,54 @@ int main(int argc, char *argv[])
         // ANSI path: pre-scan --config then load JSON
         for (int i = 0; i < argc; ++i) {
             std::string a = argv[i] ? argv[i] : "";
-            if (a.rfind("--config=", 0) == 0) configPath = a.substr(9);
+            if (a == "--config" && (i + 1) < argc && argv[i + 1] && argv[i + 1][0] != '-') {
+                configPath = argv[++i];
+            }
+            else if (a.rfind("--config=", 0) == 0) {
+                configPath = a.substr(9);
+            }
         }
-        if (configPath.empty()) configPath = "config/config.json";
-        if (LoadJSONConfig(configPath, cfg, cfgErr)) { ApplyConfig(cfg); haveCfg = true; }
+        if (configPath.empty()) {
+            std::filesystem::path p(getExeDirW());
+            p /= L"config.json";
+            configPath = WideToUtf8(p.wstring());
+        }
+        if (LoadJSONConfig(configPath, cfg, cfgErr)) {
+            ApplyConfig(cfg);
+            haveCfg = true;
+        } else {
+            std::cerr << "[Config] Failed to load config: " << configPath << " (" << cfgErr << ")" << std::endl;
+            return 1;
+        }
         pa = parseArgs(argc, argv);
     }
 #else
+    auto getExeDirA = [argv]() -> std::string {
+        std::filesystem::path p = argv && argv[0] ? std::filesystem::absolute(argv[0]) : std::filesystem::current_path();
+        return p.parent_path().string();
+    };
     // Non-Windows: ANSI only
     for (int i = 0; i < argc; ++i) {
         std::string a = argv[i] ? argv[i] : "";
-        if (a.rfind("--config=", 0) == 0) configPath = a.substr(9);
+        if (a == "--config" && (i + 1) < argc && argv[i + 1] && argv[i + 1][0] != '-') {
+            configPath = argv[++i];
+        }
+        else if (a.rfind("--config=", 0) == 0) {
+            configPath = a.substr(9);
+        }
     }
-    if (configPath.empty()) configPath = "config/config.json";
-    if (LoadJSONConfig(configPath, cfg, cfgErr)) { ApplyConfig(cfg); haveCfg = true; }
+    if (configPath.empty()) {
+        std::filesystem::path p(getExeDirA());
+        p /= "config.json";
+        configPath = p.string();
+    }
+    if (LoadJSONConfig(configPath, cfg, cfgErr)) {
+        ApplyConfig(cfg);
+        haveCfg = true;
+    } else {
+        std::cerr << "[Config] Failed to load config: " << configPath << " (" << cfgErr << ")" << std::endl;
+        return 1;
+    }
     pa = parseArgs(argc, argv);
 #endif
     // If CLI parsing failed, try composing required fields from config

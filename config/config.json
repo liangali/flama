@@ -1,52 +1,49 @@
 {
   "common": {
-    "debug": false,
+    "debug": true,
     "use_cb": true,
     "cb-multi-thread": false,
-    "new-multithread": true,
+    "new-multithread": false,
     "decode_mode": "hw",
-    "input_video_path": "path/to/your/video.mp4",
-    "output_dir": "output",
-    "new_batch_mode": true,
+    "input_video_path": "D:/data/videoclips/phone2/007_input/test(00).mp4",
+    "output_dir": "D:/data/code/flama_code/logs",
     "vpp_downscaling": {
-      "width": 224,
-      "height": 224
+      "width": 448,
+      "height": 448
     }
   },
 
   "frame_selector": {
-    "policy": "frame",
-    "frame_interval": 60,
+    "policy": "time",
+    "frame_interval": 24,
     "window_seconds": 1.0,
-    "max_per_window": 2,
+    "max_per_window": 4,
     "min_frames_between": 0,
     "min_seconds_between": 0.0,
-    "max_cached": 64,
+    "max_cached": 128,
     "remove_after_process": true,
-    "force_keyframe": true,
+    "force_keyframe": false,
     "enable_scene_cut": false,
-    "min_frames_between_scene_cut": 0,
-    "min_seconds_between_scene_cut": 0.0,
     "enable_cache": false
   },
 
   "batch": {
     "new_batch_mode": true,
-    "batch_trigger": 10,
-    "max_cache": 128,
+    "batch_trigger": 12,
+    "max_cache": 256,
     "decode_window": 0,
     "flush_partial": true,
-    "cb_batch_size": 10,
-    "max_frames_per_request": 128
+    "cb_batch_size": 16,
+    "max_frames_per_request": 256
   },
 
   "genai": {
-    "model_path": "path/to/your/model",
+    "model_path": "D:/data/models/Qwen2.5-VL-7B-Instruct-int4-opt",
     "device": "GPU",
     "scheduler": {
-      "max_num_batched_tokens": 4096,
+      "max_num_batched_tokens": 8192,
       "dynamic_split_fuse": false,
-      "max_num_seqs": 64,
+      "max_num_seqs": 8,
       "num_kv_blocks": 0,
       "cache_size": 0,
       "use_cache_eviction": false,
