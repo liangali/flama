@@ -2376,10 +2376,6 @@ int main(int argc, char *argv[])
 	if (!pa.input.empty()) g_commonConfig.input_video_path = pa.input;
 	if (!pa.mode.empty())  g_commonConfig.hw_decode = (pa.mode == "hw" || pa.mode == "HW");
     if (!pa.outDir.empty()) g_commonConfig.log_path = pa.outDir;
-    bool cli_use_cb = (pa.use_cb || paw.use_cb);
-    int cli_cb_batch_size = std::max(pa.cb_batch_size, paw.cb_batch_size);
-    if (cli_use_cb) { g_vlmConfig.enable_continuous_batching = true; g_commonConfig.use_cb = true; }
-    if (cli_cb_batch_size > 0) g_batchConfig.cb_batch_size = cli_cb_batch_size;
     // Re-apply to globals so overrides propagate consistently
     // ApplyConfig(cfg);
     DBG_LOG(std::string("[Main] DebugMode=") + (IsDebugMode() ? "ON" : "OFF"));
