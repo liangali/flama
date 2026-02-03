@@ -101,15 +101,22 @@ static bool HasHelpW(int argc, wchar_t* argv[])
 }
 #endif
 } // namespace
-// �����н���ʵ��
+
 ParsedArgs parseArgs(int argc, char* argv[]) {
     ParsedArgs pa;
+    bool parse_ok = true;
     for (int i = 1; i < argc; ++i) {
         if (!argv[i]) continue;
         std::string a = argv[i];
         std::string key, val;
-        if (!SplitArg(a, key, val))
+        if (!SplitArg(a, key, val)) {
+            if (a.rfind("--", 0) == 0) {
+                std::cerr << "ERROR: Invalid argument format: " << a << "\n"
+                          << "All arguments must use --name=value format.\n";
+                parse_ok = false;
+            }
             continue;
+        }
         if (key == "input") {
             pa.input = val;
         }
@@ -133,19 +140,31 @@ ParsedArgs parseArgs(int argc, char* argv[]) {
             pa.prompt = val;
             if (!pa.prompt.empty()) g_commonConfig.prompt_video = pa.prompt;
         }
+        else {
+            std::cerr << "ERROR: Unknown argument: --" << key << "\n";
+            parse_ok = false;
+        }
     }
-    pa.ok = (!pa.mode.empty() && (!pa.input.empty() || !pa.videoDir.empty()));
+    pa.parse_error = !parse_ok;
+    pa.ok = parse_ok && (!pa.mode.empty() && (!pa.input.empty() || !pa.videoDir.empty()));
     return pa;
 }
 
 ParsedArgsW parseArgsW(int argc, wchar_t* argv[]) {
     ParsedArgsW pa;
+    bool parse_ok = true;
     for (int i = 1; i < argc; ++i) {
         if (!argv[i]) continue;
         std::wstring a = argv[i];
         std::wstring key, val;
-        if (!SplitArgW(a, key, val))
+        if (!SplitArgW(a, key, val)) {
+            if (a.rfind(L"--", 0) == 0) {
+                std::wcerr << L"ERROR: Invalid argument format: " << a << L"\n"
+                           << L"All arguments must use --name=value format.\n";
+                parse_ok = false;
+            }
             continue;
+        }
         if (key == L"input") {
             pa.input = val;
         }
@@ -169,8 +188,13 @@ ParsedArgsW parseArgsW(int argc, wchar_t* argv[]) {
             pa.prompt = val;
             if (!pa.prompt.empty()) g_commonConfig.prompt_video = WideToUtf8(pa.prompt);
         }
+        else {
+            std::wcerr << L"ERROR: Unknown argument: --" << key << L"\n";
+            parse_ok = false;
+        }
     }
-    pa.ok = (!pa.mode.empty() && (!pa.input.empty() || !pa.videoDir.empty()));
+    pa.parse_error = !parse_ok;
+    pa.ok = parse_ok && (!pa.mode.empty() && (!pa.input.empty() || !pa.videoDir.empty()));
     return pa;
 }
 
@@ -236,6 +260,9 @@ bool ParseCommandLineAndLoadConfig(int argc,
         ApplyConfig(cfg);
         paw = parseArgsW(wargc, wargv);
         LocalFree(wargv);
+        if (paw.parse_error) {
+            return false;
+        }
         if (paw.ok) {
             pa.ok = true;
             pa.debug = paw.debug;
@@ -247,6 +274,9 @@ bool ParseCommandLineAndLoadConfig(int argc,
             pa.jsonFile = WideToUtf8(paw.jsonFile);
         } else {
             pa = parseArgs(argc, argv);
+            if (pa.parse_error) {
+                return false;
+            }
         }
         return true;
     }
@@ -274,6 +304,9 @@ bool ParseCommandLineAndLoadConfig(int argc,
     }
     ApplyConfig(cfg);
     pa = parseArgs(argc, argv);
+    if (pa.parse_error) {
+        return false;
+    }
     return true;
 }
 

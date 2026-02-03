@@ -12,6 +12,7 @@ struct ParsedArgs {
     std::string videoDir; // directory with multiple videos
     std::string jsonFile; // output JSON file path
     bool debug = false;
+    bool parse_error = false;
     bool ok = true;
 };
 
@@ -25,6 +26,7 @@ struct ParsedArgsW {
     std::wstring videoDir; // directory with multiple videos
     std::wstring jsonFile; // output JSON file path
     bool debug = false;
+    bool parse_error = false;
     bool ok = true;
 };
 
