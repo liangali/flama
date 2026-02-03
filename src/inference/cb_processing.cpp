@@ -6,11 +6,11 @@
 
 #include "cb_processing.h"
 #include "continuous_batching_chat.h"
-#include "../batch/batch_state.h"
-#include "../video/segment_timing.h"
-#include "../utils/util.h"
-#include "../utils/debug.h"
-#include "../utils/profiling.h"
+#include "batch/batch_state.h"
+#include "video/segment_timing.h"
+#include "utils/util.h"
+#include "utils/debug.h"
+#include "utils/profiling.h"
 
 #include <iostream>
 #include <vector>

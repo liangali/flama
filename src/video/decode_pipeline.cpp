@@ -8,12 +8,13 @@
 #include "frame_selector.h"
 #include "segment_timing.h"
 #include "vpp.h"
-#include "../batch/batch_state.h"
-#include "../inference/cb_processing.h"
-#include "../inference/vlm_chat.h"
-#include "../utils/util.h"
-#include "../utils/debug.h"
-#include "../utils/profiling.h"
+#include "batch/batch_state.h"
+#include "inference/cb_processing.h"
+#include "inference/vlm_chat.h"
+#include "utils/util.h"
+#include "utils/debug.h"
+#include "utils/profiling.h"
+#include "device/texture_resource_pool.h"
 
 #include <iostream>
 #include <chrono>

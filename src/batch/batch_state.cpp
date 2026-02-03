@@ -5,14 +5,14 @@
 //==============================================================================
 
 #include "batch_state.h"
-#include "../utils/util.h"
-#include "../utils/debug.h"
-#include "../utils/profiling.h"
-#include "../device/texture_resource_pool.h"
-#include "../video/vpp.h"
-#include "../video/segment_timing.h"
-#include "../inference/vlm_chat.h"
-#include "../inference/continuous_batching_chat.h"
+#include "utils/util.h"
+#include "utils/debug.h"
+#include "utils/profiling.h"
+#include "device/texture_resource_pool.h"
+#include "video/vpp.h"
+#include "video/segment_timing.h"
+#include "inference/vlm_chat.h"
+#include "inference/continuous_batching_chat.h"
 
 #include <iostream>
 #include <chrono>

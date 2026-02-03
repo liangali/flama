@@ -5,8 +5,8 @@
 //==============================================================================
 
 #include "segment_timing.h"
-#include "../batch/batch_state.h"
-#include "../output/vlm_json_output.h"
+#include "batch/batch_state.h"
+#include "output/vlm_json_output.h"
 #include <cmath>
 
 double RoundTimeSec(double v)
