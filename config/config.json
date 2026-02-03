@@ -1,12 +1,12 @@
 {
   "common": {
-    "debug": true,
+    "debug": false,
     "use_cb": true,
     "cb-multi-thread": false,
     "new-multithread": false,
     "decode_mode": "hw",
-    "input_video_path": "D:/data/videoclips/phone2/007_input/test(00).mp4",
-    "output_dir": "D:/data/code/flama_code/logs",
+    "input_video_path": "",
+    "output_dir": "",
     "vpp_downscaling": {
       "width": 448,
       "height": 448
