@@ -422,32 +422,33 @@ void decode_frames(AVFormatContext *format_context,
                                         dectexture->GetDevice(&m_pD3D11Device);
                                         m_pD3D11Device->GetImmediateContext(&m_pD3D11DeviceContext);
                                         m_texturePool.Initialize(MAX_FRAME_QUEUE);
-                                        D3D11_TEXTURE2D_DESC poolDesc{};
-                                        poolDesc.Width = g_commonConfig.vpp_down_width;
-                                        poolDesc.Height = g_commonConfig.vpp_down_height;
-                                        poolDesc.MipLevels = 1;
-                                        poolDesc.ArraySize = 1;
-                                        poolDesc.Format = initDesc.Format;
-                                        if (initDesc.Format != DXGI_FORMAT_P010 && initDesc.Format != DXGI_FORMAT_NV12)
-                                        {
-                                            poolDesc.Format = DXGI_FORMAT_NV12;
-                                        }
-                                        poolDesc.SampleDesc.Count = 1;
-                                        poolDesc.Usage = D3D11_USAGE_DEFAULT;
-                                        poolDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-                                        poolDesc.CPUAccessFlags = 0;
-                                        poolDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
+                                        DXGI_FORMAT vppOutFormat = DXGI_FORMAT_NV12;
+                                        if (initDesc.Format == DXGI_FORMAT_P010)
+                                            vppOutFormat = DXGI_FORMAT_NV12;
+                                        D3D11_TEXTURE2D_DESC outDesc{};
+                                        outDesc.Width = g_commonConfig.vpp_down_width;
+                                        outDesc.Height = g_commonConfig.vpp_down_height;
+                                        outDesc.MipLevels = 1;
+                                        outDesc.ArraySize = 1;
+                                        outDesc.Format = vppOutFormat;
+                                        outDesc.SampleDesc.Count = 1;
+                                        outDesc.Usage = D3D11_USAGE_DEFAULT;
+                                        outDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+                                        outDesc.CPUAccessFlags = 0;
+                                        outDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
                                         for (int i = 0; i < MAX_FRAME_QUEUE; i++)
                                         {
                                             ID3D11Texture2D *tex = nullptr;
-                                            HRESULT hr = m_pD3D11Device->CreateTexture2D(&poolDesc, nullptr, &tex);
+                                            HRESULT hr = m_pD3D11Device->CreateTexture2D(&outDesc, nullptr, &tex);
                                             if (hr == S_OK)
                                                 m_texturePool.SetTexture(i, tex);
                                         }
-                                        poolDesc.Width = initDesc.Width;
-                                        poolDesc.Height = initDesc.Height;
+                                        D3D11_TEXTURE2D_DESC tempDesc = outDesc;
+                                        tempDesc.Width = initDesc.Width;
+                                        tempDesc.Height = initDesc.Height;
+                                        tempDesc.Format = initDesc.Format;
                                         ID3D11Texture2D *tempTex = nullptr;
-                                        HRESULT hr = m_pD3D11Device->CreateTexture2D(&poolDesc, nullptr, &tempTex);
+                                        HRESULT hr = m_pD3D11Device->CreateTexture2D(&tempDesc, nullptr, &tempTex);
                                         if (hr == S_OK)
                                             m_temp_texture = tempTex;
                                         pVPPTester = new CVPPTest();
@@ -539,29 +540,25 @@ void decode_frames(AVFormatContext *format_context,
                                         DBG_LOGF("m_pD3D11Device =%p", m_pD3D11Device);
 
                                         m_texturePool.Initialize(MAX_FRAME_QUEUE);
-                                        D3D11_TEXTURE2D_DESC textureDesc;
-                                        ZeroMemory(&textureDesc, sizeof(textureDesc));
-                                        textureDesc.Width = g_commonConfig.vpp_down_width;
-                                        textureDesc.Height = g_commonConfig.vpp_down_height;
-                                        textureDesc.MipLevels = 1;
-                                        textureDesc.ArraySize = 1;
-                                        textureDesc.Format = desc.Format;
-                                        if (desc.Format != DXGI_FORMAT_P010 && desc.Format != DXGI_FORMAT_NV12)
-                                        {
-                                            DBG_LOGF("Attention: Wrong format!! %d", desc.Format);
-                                            textureDesc.Format = DXGI_FORMAT_NV12;
-                                        }
-                                        textureDesc.SampleDesc.Count = 1;
-                                        textureDesc.SampleDesc.Quality = 0;
-                                        textureDesc.Usage = D3D11_USAGE_DEFAULT;
-                                        textureDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-                                        textureDesc.CPUAccessFlags = 0;
-                                        textureDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
+                                        DXGI_FORMAT vppOutFormat = DXGI_FORMAT_NV12;
+                                        D3D11_TEXTURE2D_DESC outDesc;
+                                        ZeroMemory(&outDesc, sizeof(outDesc));
+                                        outDesc.Width = g_commonConfig.vpp_down_width;
+                                        outDesc.Height = g_commonConfig.vpp_down_height;
+                                        outDesc.MipLevels = 1;
+                                        outDesc.ArraySize = 1;
+                                        outDesc.Format = vppOutFormat;
+                                        outDesc.SampleDesc.Count = 1;
+                                        outDesc.SampleDesc.Quality = 0;
+                                        outDesc.Usage = D3D11_USAGE_DEFAULT;
+                                        outDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+                                        outDesc.CPUAccessFlags = 0;
+                                        outDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
 
                                         ID3D11Texture2D* texture = nullptr;
                                         for (int index = 0; index < MAX_FRAME_QUEUE; index++)
                                         {
-                                            HRESULT hr = m_pD3D11Device->CreateTexture2D(&textureDesc, nullptr, &texture);
+                                            HRESULT hr = m_pD3D11Device->CreateTexture2D(&outDesc, nullptr, &texture);
                                             if (hr != S_OK)
                                             {
                                                 DBG_LOG("Failed to create texture");
@@ -569,10 +566,12 @@ void decode_frames(AVFormatContext *format_context,
                                             m_texturePool.SetTexture(index, texture);
                                         }
 
-                                        textureDesc.Width = desc.Width;
-                                        textureDesc.Height = desc.Height;
+                                        D3D11_TEXTURE2D_DESC tempDesc = outDesc;
+                                        tempDesc.Width = desc.Width;
+                                        tempDesc.Height = desc.Height;
+                                        tempDesc.Format = desc.Format;
 
-                                        HRESULT hr = m_pD3D11Device->CreateTexture2D(&textureDesc, nullptr, &m_temp_texture);
+                                        HRESULT hr = m_pD3D11Device->CreateTexture2D(&tempDesc, nullptr, &m_temp_texture);
                                         if (hr != S_OK)
                                         {
                                             printf("Failed to create texture\n");
