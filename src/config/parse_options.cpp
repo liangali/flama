@@ -210,7 +210,7 @@ void PrintHelp(const char* exeName)
         << "\n"
         << "  --input=PATH           Input video file path.\n"
         << "  --video_dir=PATH       Directory of video files (sorted by filename).\n"
-        << "  --mode=hw|sw           Decode path: hw (D3D11) or sw.\n"
+        << "  --mode=hw|sw           Decode path: hw (D3D11) or sw (default: hw).\n"
         << "  --config=PATH          JSON config path (default: exe_dir/config.json).\n"
         << "  --json_file=PATH       Output JSON file for VLM results (default: ./output_vlm.json).\n"
         << "  --prompt=TEXT          Override VLM prompt for video batches.\n"
@@ -320,6 +320,9 @@ bool FinalizeParsedArgs(ParsedArgs& pa,
     {
         if (cfg.commonCfg.mode) {
             pa.mode = cfg.commonCfg.mode.value();
+        }
+        if (pa.mode.empty()) {
+            pa.mode = "hw";
         }
         if (cfg.commonCfg.input && pa.input.empty() && !hasVideoDir) {
             pa.input = cfg.commonCfg.input.value();

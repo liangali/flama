@@ -176,19 +176,43 @@ mfxStatus CVPPTest::Init(int tIndex, Options &opts, std::vector<mfxU32> *adapter
     sts = MFXVideoCORE_SetHandle(m_session, MFX_HANDLE_D3D11_DEVICE, (mfxHDL)opts.pDevice);
     VERIFY(MFX_ERR_NONE == sts, "ERROR: SetHandle", sts);
 
+    auto chroma_for_fourcc = [](mfxU32 fourcc) -> mfxU16 {
+        switch (fourcc) {
+        case MFX_FOURCC_NV12:
+        case MFX_FOURCC_P010:
+        case MFX_FOURCC_I010:
+            return MFX_CHROMAFORMAT_YUV420;
+        case MFX_FOURCC_RGB4:
+        case MFX_FOURCC_BGR4:
+            return MFX_CHROMAFORMAT_YUV444;
+        default:
+            return MFX_CHROMAFORMAT_YUV420;
+        }
+    };
+    auto set_bitdepth = [](mfxFrameInfo& fi, mfxU32 fourcc) {
+        if (fourcc == MFX_FOURCC_P010 || fourcc == MFX_FOURCC_I010) {
+            fi.BitDepthLuma = 10;
+            fi.BitDepthChroma = 10;
+            fi.Shift = 1;
+        } else {
+            fi.BitDepthLuma = 8;
+            fi.BitDepthChroma = 8;
+            fi.Shift = 0;
+        }
+    };
+
     m_vppParams.vpp.In.FourCC = m_pOpts->inFourCC;
-    m_vppParams.vpp.In.ChromaFormat =
-        (m_pOpts->inFourCC == MFX_FOURCC_NV12) ? MFX_CHROMAFORMAT_YUV420 : MFX_CHROMAFORMAT_YUV444;
+    m_vppParams.vpp.In.ChromaFormat = chroma_for_fourcc(m_pOpts->inFourCC);
     m_vppParams.vpp.In.CropW         = m_pOpts->srcWidth;
     m_vppParams.vpp.In.CropH         = m_pOpts->srcHeight;
-    m_vppParams.vpp.In.Width         = ALIGN16(m_vppParams.mfx.FrameInfo.CropW);
-    m_vppParams.vpp.In.Height        = ALIGN16(m_vppParams.mfx.FrameInfo.CropH);
+    m_vppParams.vpp.In.Width         = ALIGN16(m_vppParams.vpp.In.CropW);
+    m_vppParams.vpp.In.Height        = ALIGN16(m_vppParams.vpp.In.CropH);
     m_vppParams.vpp.In.PicStruct     = MFX_PICSTRUCT_PROGRESSIVE;
     m_vppParams.vpp.In.FrameRateExtN = 30;
     m_vppParams.vpp.In.FrameRateExtD = 1;
+    set_bitdepth(m_vppParams.vpp.In, m_pOpts->inFourCC);
     m_vppParams.vpp.Out.FourCC       = m_pOpts->outFourCC;
-    m_vppParams.vpp.Out.ChromaFormat =
-        (m_pOpts->outFourCC == MFX_FOURCC_NV12) ? MFX_CHROMAFORMAT_YUV420 : MFX_CHROMAFORMAT_YUV444;
+    m_vppParams.vpp.Out.ChromaFormat = chroma_for_fourcc(m_pOpts->outFourCC);
     m_vppParams.vpp.Out.Width         = ALIGN16(m_pOpts->dstWidth);
     m_vppParams.vpp.Out.Height        = ALIGN16(m_pOpts->dstHeight);
     m_vppParams.vpp.Out.CropW         = m_pOpts->dstWidth;
@@ -196,6 +220,7 @@ mfxStatus CVPPTest::Init(int tIndex, Options &opts, std::vector<mfxU32> *adapter
     m_vppParams.vpp.Out.PicStruct     = MFX_PICSTRUCT_PROGRESSIVE;
     m_vppParams.vpp.Out.FrameRateExtN = 30;
     m_vppParams.vpp.Out.FrameRateExtD = 1;
+    set_bitdepth(m_vppParams.vpp.Out, m_pOpts->outFourCC);
 
     m_vppParams.IOPattern  = MFX_IOPATTERN_IN_VIDEO_MEMORY | MFX_IOPATTERN_OUT_VIDEO_MEMORY;
     m_vppParams.AsyncDepth = 1;
@@ -211,8 +236,12 @@ mfxStatus CVPPTest::Init(int tIndex, Options &opts, std::vector<mfxU32> *adapter
     m_frameInfo.fourcc = m_pOpts->inFourCC;
     m_frameInfo.width  = m_pOpts->srcWidth;
     m_frameInfo.height = m_pOpts->srcHeight;
-    m_frameInfo.pitch = (m_pOpts->inFourCC == MFX_FOURCC_RGB4) ? m_vppParams.mfx.FrameInfo.Width * 4
-                                                               : m_vppParams.mfx.FrameInfo.Width;
+    m_frameInfo.pitch = m_vppParams.vpp.In.Width;
+    if (m_pOpts->inFourCC == MFX_FOURCC_RGB4) {
+        m_frameInfo.pitch *= 4;
+    } else if (m_pOpts->inFourCC == MFX_FOURCC_P010 || m_pOpts->inFourCC == MFX_FOURCC_I010) {
+        m_frameInfo.pitch *= 2;
+    }
 
 #ifdef TOOLS_ENABLE_OPENCL
     if (m_pOpts->surfaceType == MFX_SURFACE_TYPE_OPENCL_IMG2D) {
