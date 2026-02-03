@@ -140,6 +140,15 @@ endif()
 
 # Post-build: Copy runtime dependencies to output directory
 if(WIN32)
+    # Copy config.json next to the built executable for all configurations
+    add_custom_command(TARGET flama POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E echo "Copying config.json to output directory..."
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/config/config.json"
+            $<TARGET_FILE_DIR:flama>
+        VERBATIM
+    )
+
     # Helper function to copy DLLs
     function(copy_dlls_to_output target_name dll_dir dll_pattern)
         add_custom_command(TARGET ${target_name} POST_BUILD

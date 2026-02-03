@@ -17,7 +17,7 @@
     "policy": "time",
     "frame_interval": 24,
     "window_seconds": 1.0,
-    "max_per_window": 4,
+    "max_per_window": 2,
     "min_frames_between": 0,
     "min_seconds_between": 0.0,
     "max_cached": 128,
@@ -29,7 +29,7 @@
 
   "batch": {
     "new_batch_mode": true,
-    "batch_trigger": 12,
+    "batch_trigger": 6,
     "max_cache": 256,
     "decode_window": 0,
     "flush_partial": true,
