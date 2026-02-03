@@ -69,6 +69,8 @@ target_include_directories(flama PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/video
     ${CMAKE_CURRENT_SOURCE_DIR}/src/inference
     ${CMAKE_CURRENT_SOURCE_DIR}/src/image
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/output
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/batch
     ${FFMPEG_INCLUDE_DIRS}
     ${OpenVINO_INCLUDE_DIRS}
     ${VPL_INCLUDE_DIRS}
