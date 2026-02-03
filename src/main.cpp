@@ -10,10 +10,12 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cwctype>
+#include <sstream>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
@@ -2240,21 +2242,27 @@ static std::vector<std::filesystem::path> CollectVideoFiles(const std::filesyste
 
 static bool WriteVlmJsonFile(const std::filesystem::path &outPath, const std::vector<VlmJsonVideo> &videos)
 {
-    nlohmann::json j;
+    auto FormatFixed3 = [](double v) {
+        std::ostringstream oss;
+        oss.setf(std::ios::fixed);
+        oss << std::setprecision(3) << v;
+        return oss.str();
+    };
+    nlohmann::ordered_json j;
     j["processed_videos"] = nlohmann::json::array();
     for (const auto &video : videos)
     {
-        nlohmann::json v;
+        nlohmann::ordered_json v;
         v["input_video"] = video.input_video;
         v["prompt"] = video.prompt;
         v["segments"] = nlohmann::json::array();
         for (const auto &seg : video.segments)
         {
-            nlohmann::json s;
+            nlohmann::ordered_json s;
             s["seg_id"] = seg.seg_id;
-            s["seg_start"] = seg.seg_start;
-            s["seg_end"] = seg.seg_end;
-            s["seg_dur"] = seg.seg_dur;
+            s["seg_start"] = FormatFixed3(seg.seg_start);
+            s["seg_end"] = FormatFixed3(seg.seg_end);
+            s["seg_dur"] = FormatFixed3(seg.seg_dur);
             s["seg_desc"] = seg.seg_desc;
             v["segments"].push_back(std::move(s));
         }
