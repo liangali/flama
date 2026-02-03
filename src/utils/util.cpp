@@ -6,6 +6,13 @@
 
 #include "./util.h" //NOLINT
 #include <algorithm>
+
+// Define global configuration instances
+BatchConfig g_batchConfig;
+CommonConfig g_commonConfig;
+FSConfig g_fsConfig;
+VLMConfig g_vlmConfig;
+
 void Usage(void) {
     printf("\n");
     printf("Usage: val-surface-sharing [options]\n\n");
