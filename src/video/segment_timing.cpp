@@ -7,6 +7,7 @@
 #include "segment_timing.h"
 #include "batch/batch_state.h"
 #include "json/vlm_json_output.h"
+#include "utils/util.h"
 #include <cmath>
 
 double RoundTimeSec(double v)
@@ -26,17 +27,27 @@ double GetFramePtsSeconds(const AVFrame *frame, AVRational time_base)
 
 void UpdateBatchSegmentTiming(double pts_sec)
 {
+    // Calculate time window end boundary for proper segment duration
+    double window_seconds = g_fsConfig.window_seconds;
+    double window_end = pts_sec;
+    if (window_seconds > 0.0) {
+        // Calculate the end boundary of the time window containing this frame
+        // Add small epsilon to handle exact boundary cases (e.g., pts_sec = 1.0 should be in window [1, 2))
+        window_end = std::ceil((pts_sec + 0.0001) / window_seconds) * window_seconds;
+    }
+
     if (!g_batchState.seg_has_pts)
     {
-        g_batchState.seg_start_sec = pts_sec;
-        g_batchState.seg_end_sec = pts_sec;
+        // Use next_seg_start_sec for segment continuity
+        // For the first segment, next_seg_start_sec is initialized to 0.0
+        g_batchState.seg_start_sec = g_batchState.next_seg_start_sec;
+        g_batchState.seg_end_sec = window_end;
         g_batchState.seg_has_pts = true;
         return;
     }
-    if (pts_sec < g_batchState.seg_start_sec)
-        g_batchState.seg_start_sec = pts_sec;
-    if (pts_sec > g_batchState.seg_end_sec)
-        g_batchState.seg_end_sec = pts_sec;
+    // Only update seg_end_sec (seg_start_sec is fixed at segment start)
+    if (window_end > g_batchState.seg_end_sec)
+        g_batchState.seg_end_sec = window_end;
 }
 
 void RecordJsonSegmentFromTimes(double start_sec, double end_sec, const std::string &desc)

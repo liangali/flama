@@ -55,6 +55,11 @@ void ReturnCachedTextures(std::vector<ID3D11Texture2D*> &v)
 
 void BatchState::reset()
 {
+    // Preserve segment end time for next segment's start (continuity)
+    if (seg_has_pts) {
+        next_seg_start_sec = seg_end_sec;
+    }
+
     FreeCachedFrames(cached);
     FreeCachedFrames(cached_scaled);
 #ifdef _WIN32
@@ -70,6 +75,7 @@ void BatchState::reset()
     seg_start_sec = 0.0;
     seg_end_sec = 0.0;
     seg_has_pts = false;
+    // Note: next_seg_start_sec is NOT reset - it carries over for continuity
 }
 
 void ResetHwResources()

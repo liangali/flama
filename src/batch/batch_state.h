@@ -48,6 +48,7 @@ struct BatchState
     double seg_start_sec = 0.0;              // segment start time in seconds
     double seg_end_sec = 0.0;                // segment end time in seconds
     bool seg_has_pts = false;                // whether segment timing has valid pts
+    double next_seg_start_sec = 0.0;         // start time for next segment (continuity)
     bool isHW = false;                       // true if using hardware path (D3D11VA)
     struct SwsContext *swsCtx = nullptr;     // software scaling context
 
