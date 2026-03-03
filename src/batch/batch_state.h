@@ -79,6 +79,11 @@ extern BatchState g_batchState;
 // Global CB inference queue
 extern std::vector<CBInferenceParams> g_cbInferenceQueue;
 
+// Multi-video progress for key log messages
+extern size_t g_currentVideoOrdinal;
+extern size_t g_totalVideoCount;
+std::string GetVideoProgressPrefix();
+
 // Global D3D11 device pointers
 #ifdef _WIN32
 extern ID3D11Device *m_pD3D11Device;

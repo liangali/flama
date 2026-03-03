@@ -162,8 +162,11 @@ int main(int argc, char *argv[])
 #endif
 
     bool all_ok = true;
-    for (const auto &rawPath : inputVideos)
+    g_totalVideoCount = inputVideos.size();
+    for (size_t videoIndex = 0; videoIndex < inputVideos.size(); ++videoIndex)
     {
+        g_currentVideoOrdinal = videoIndex + 1;
+        const auto &rawPath = inputVideos[videoIndex];
         std::filesystem::path inputPath = std::filesystem::absolute(rawPath);
 #ifdef _WIN32
         std::wstring inputPathW = inputPath.wstring();
@@ -198,7 +201,7 @@ int main(int argc, char *argv[])
             continue;
         }
 
-        std::cout << "Opened input video file " << input_file << " file format: " << format_context->iformat->name << std::endl;
+        std::cout << GetVideoProgressPrefix() << "Opened input video file " << input_file << " file format: " << format_context->iformat->name << std::endl;
 
         if (avformat_find_stream_info(format_context, nullptr) < 0)
         {
@@ -307,8 +310,8 @@ int main(int argc, char *argv[])
             auto decode_end = std::chrono::high_resolution_clock::now();
 
             std::cout << "total time of entire pipeline: " << std::chrono::duration_cast<std::chrono::milliseconds>(decode_end - decode_start).count() << " ms" << std::endl;
-            std::cout << "[SW] total inference time: " << (g_sw_inference_total_us / 1000) << " ms" << std::endl;
-            std::cout << "[SW] total decode_frames_sw time: " << (g_sw_pipeline_total_us / 1000) << " ms" << std::endl;
+            std::cout << GetVideoProgressPrefix() << "[SW] total inference time: " << (g_sw_inference_total_us / 1000) << " ms" << std::endl;
+            std::cout << GetVideoProgressPrefix() << "[SW] total decode_frames_sw time: " << (g_sw_pipeline_total_us / 1000) << " ms" << std::endl;
         }
         else
         {
@@ -324,8 +327,8 @@ int main(int argc, char *argv[])
             decode_frames(format_context, codec_context, stream_index);
             auto decode_end = std::chrono::high_resolution_clock::now();
 
-            std::cout << "[HW] total inference time: " << (g_hw_inference_total_us / 1000) << " ms" << std::endl;
-            std::cout << "[HW] total decode_frames time: " << (g_hw_pipeline_total_us / 1000) << " ms" << std::endl;
+            std::cout << GetVideoProgressPrefix() << "[HW] total inference time: " << (g_hw_inference_total_us / 1000) << " ms" << std::endl;
+            std::cout << GetVideoProgressPrefix() << "[HW] total decode_frames time: " << (g_hw_pipeline_total_us / 1000) << " ms" << std::endl;
         }
 
         cleanup(format_context, codec_context);
@@ -337,6 +340,8 @@ int main(int argc, char *argv[])
         DBG_LOG("[VLM] Result file finalized.");
         prof::Summary::Get().PrintSummary();
     }
+    g_currentVideoOrdinal = 0;
+    g_totalVideoCount = 0;
 
     // Write JSON output
     try

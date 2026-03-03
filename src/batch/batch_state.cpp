@@ -22,6 +22,15 @@
 // Global instances
 BatchState g_batchState;
 std::vector<CBInferenceParams> g_cbInferenceQueue;
+size_t g_currentVideoOrdinal = 0;
+size_t g_totalVideoCount = 0;
+
+std::string GetVideoProgressPrefix()
+{
+    if (g_totalVideoCount <= 1 || g_currentVideoOrdinal == 0)
+        return "";
+    return "[" + std::to_string(g_currentVideoOrdinal) + "/" + std::to_string(g_totalVideoCount) + "] ";
+}
 
 #ifdef _WIN32
 ID3D11Device *m_pD3D11Device = nullptr;
@@ -409,7 +418,7 @@ void RunBatchHW()
     }
     bs.cached_textures.clear();
 
-    std::cout << "run batch hw : use cb=" << g_commonConfig.use_cb << std::endl;
+    std::cout << GetVideoProgressPrefix() << "run batch hw : use cb=" << g_commonConfig.use_cb << std::endl;
     if (g_commonConfig.use_cb)
     {
         auto &frameProfiler = prof::FrameProfiler::Get();
@@ -457,7 +466,7 @@ void RunBatchHW()
                 }
                 DBG_LOG(std::string("[VLM] Queued CB params (batch ") + std::to_string(bs.batchIndex) + ")");
             }
-            std::cout << "run batch hw : cb_batch_size=" << g_batchConfig.cb_batch_size << std::endl;
+            std::cout << GetVideoProgressPrefix() << "run batch hw : cb_batch_size=" << g_batchConfig.cb_batch_size << std::endl;
             if(cb_batch_size!=0 && (bs.batchIndex % cb_batch_size == 0))
             {
                 if(g_commonConfig.cb_multi_thread)
@@ -471,14 +480,14 @@ void RunBatchHW()
                     CbUnlock();
                     CbNotifyAll();
                     CbLock();
-                    std::cout << "wait for g_cb_enqueued_batches >= g_cb_pending_batches" << std::endl;
+                    std::cout << GetVideoProgressPrefix() << "wait for g_cb_enqueued_batches >= g_cb_pending_batches" << std::endl;
                     // Wait implemented in cb_processing
                     while (g_cb_enqueued_batches < g_cb_pending_batches) {
                         CbUnlock();
                         std::this_thread::sleep_for(std::chrono::milliseconds(1));
                         CbLock();
                     }
-                    std::cout << "decode continue as g_cb_enqueued_batches >= g_cb_pending_batches" << std::endl;
+                    std::cout << GetVideoProgressPrefix() << "decode continue as g_cb_enqueued_batches >= g_cb_pending_batches" << std::endl;
                     CbUnlock();
                 }
                 else { ProcessCBQueueAndReport(); }
