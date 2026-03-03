@@ -93,3 +93,18 @@ void SetVLMResultFileW(const std::wstring& wpath);
 void SetVLMInputFile(const std::string& inputFile);
 // Reset internal sampling state for multi-video runs
 void ResetSampleState();
+
+struct VLMTokenTotals
+{
+    uint64_t input_tokens = 0;
+    uint64_t output_tokens = 0;
+    uint64_t requests = 0;
+};
+
+void ResetVLMTokenTotals();
+void AddVLMTokenTotals(uint64_t inputTokens, uint64_t outputTokens);
+void AddVLMTokenTotalsWithRequestCount(uint64_t inputTokens, uint64_t outputTokens, uint64_t requestCount);
+void AddVLMTokenTotalsFromPerfMetrics(ov::genai::PerfMetrics& perfMetrics);
+void AddVLMTokenTotalsFromVLMResults(ov::genai::VLMDecodedResults& results);
+VLMTokenTotals GetVLMTokenTotals();
+void PrintVLMTokenTotals(const std::string& prefix = "[VLM Tokens]");

@@ -6,6 +6,7 @@
 
 #include "cb_processing.h"
 #include "continuous_batching_chat.h"
+#include "vlm_chat.h"
 #include "batch/batch_state.h"
 #include "video/segment_timing.h"
 #include "utils/util.h"
@@ -14,6 +15,7 @@
 
 #include <iostream>
 #include <vector>
+#include <algorithm>
 
 #ifndef _WIN32
 #include <mutex>
@@ -101,6 +103,115 @@ static void CbWait(Pred pred)
 }
 #endif
 
+namespace
+{
+struct CBBatchRunResult
+{
+    std::vector<std::string> outputs;
+    uint64_t inference_us = 0;
+};
+
+CBBatchRunResult RunCBBatchRequests(std::vector<CBInferenceParams>& requests)
+{
+    CBBatchRunResult runResult;
+    if (requests.empty())
+    {
+        return runResult;
+    }
+
+    auto& pipe = GetCachedCBPipeline();
+    std::vector<std::string> prompts;
+    std::vector<std::vector<ov::Tensor>> images;
+    std::vector<std::vector<ov::Tensor>> videos;
+    std::vector<ov::genai::GenerationConfig> samplingParams;
+    prompts.reserve(requests.size());
+    images.reserve(requests.size());
+    videos.reserve(requests.size());
+    samplingParams.reserve(requests.size());
+
+    for (auto& req : requests)
+    {
+        prompts.push_back(req.prompt);
+        samplingParams.push_back(req.sampling_params);
+
+        std::vector<ov::Tensor> imageInputs;
+        std::vector<ov::Tensor> videoInputs;
+        if (req.use_video_input)
+        {
+            videoInputs = std::move(req.tensors);
+        }
+        else
+        {
+            imageInputs = std::move(req.tensors);
+        }
+        images.push_back(std::move(imageInputs));
+        videos.push_back(std::move(videoInputs));
+    }
+
+    const auto start = std::chrono::high_resolution_clock::now();
+    auto results = pipe.generate(prompts, images, videos, samplingParams);
+    const auto end = std::chrono::high_resolution_clock::now();
+    runResult.inference_us = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+
+    auto tokenizer = pipe.get_tokenizer();
+    uint64_t totalInputTokens = 0;
+    uint64_t totalOutputTokens = 0;
+    uint64_t visibleOutputTokens = 0;
+    std::vector<uint64_t> outputMetricValues;
+    outputMetricValues.reserve(results.size());
+
+    runResult.outputs.reserve(results.size());
+    for (auto& result : results)
+    {
+        auto& metrics = result.perf_metrics;
+        totalInputTokens += metrics.get_num_input_tokens();
+
+        const uint64_t outputMetric = metrics.get_num_generated_tokens();
+        totalOutputTokens += outputMetric;
+        outputMetricValues.push_back(outputMetric);
+
+        std::string text = static_cast<std::string>(result);
+        runResult.outputs.push_back(text);
+
+        const auto encoded = tokenizer.encode(text);
+        const auto& shape = encoded.input_ids.get_shape();
+        if (!shape.empty())
+        {
+            visibleOutputTokens += shape.back();
+        }
+    }
+
+    uint64_t finalOutputTokens = totalOutputTokens;
+    if (outputMetricValues.size() > 1)
+    {
+        const uint64_t firstOutputMetric = outputMetricValues.front();
+        const bool allSame = std::all_of(
+            outputMetricValues.begin() + 1,
+            outputMetricValues.end(),
+            [firstOutputMetric](uint64_t value) { return value == firstOutputMetric; });
+
+        if (allSame)
+        {
+            // OpenVINO batched VLM currently reports batch-level generated token count
+            // in each VLMDecodedResults item. Detect that case and count it once.
+            const uint64_t specialTokenAllowance = static_cast<uint64_t>(outputMetricValues.size()) * 4;
+            if (firstOutputMetric >= visibleOutputTokens &&
+                firstOutputMetric <= visibleOutputTokens + specialTokenAllowance)
+            {
+                finalOutputTokens = firstOutputMetric;
+            }
+        }
+    }
+
+    AddVLMTokenTotalsWithRequestCount(
+        totalInputTokens,
+        finalOutputTokens,
+        static_cast<uint64_t>(results.size()));
+
+    return runResult;
+}
+}
+
 void CBLmmEngineThreadFunc()
 {
     auto& collector = GetCachedGenerationInfoCollector();
@@ -131,9 +242,6 @@ void StartNewCBProcThreadIfEnabled()
     g_cb_stop.store(false);
     g_hw_cb_multi_start = std::chrono::steady_clock::now();
     g_cbProcThread = std::thread([]() {
-        auto& pipe = GetCachedCBPipeline();
-        auto& generation_info_collector = GetCachedGenerationInfoCollector();
-        generation_info_collector.set_start_time(std::chrono::steady_clock::now());
         while (true) {
             CbLock();
             CbWait([]() { return g_cb_stop.load() || (g_cb_pending_batches > g_cb_enqueued_batches); });
@@ -150,58 +258,35 @@ void StartNewCBProcThreadIfEnabled()
                 cb_timer = false;
             }
 
-            int req_i = 0;
-            std::vector<ov::Tensor> empty_images;
-            for (auto& req : local_queue) {
-                DBG_LOG(std::string("[CB new-mt] Enqueue request batchIndex=") + std::to_string(req.batchIndex));
-                generation_info_collector.add_generation(&pipe, req.batchIndex, req.prompt, empty_images, req.tensors, req.sampling_params, false);
-                ++req_i;
-            }
             CbLock();
             g_cb_enqueued_batches = g_cb_pending_batches;
             CbUnlock();
             CbNotifyAll();
 
-            while (pipe.has_non_finished_requests()) {
-                pipe.step();
-            }
-
+            auto runResult = RunCBBatchRequests(local_queue);
             g_hw_cb_end = std::chrono::steady_clock::now();
-            const uint64_t cb_inference_us = std::chrono::duration_cast<std::chrono::microseconds>(g_hw_cb_end - g_hw_cb_start).count();
-            g_hw_inference_total_us += cb_inference_us;
-            auto tokenizer = pipe.get_tokenizer();
-            size_t i = 0;
-            for (auto& generation_info : generation_info_collector.generations_info) {
-                auto outputs = generation_info.generation_handle->read_all();
-                std::string combined;
-                combined.reserve(1024);
-                for (size_t k = 0; k < outputs.size(); ++k) {
-                    auto text = tokenizer.decode(outputs[k].generated_ids);
-                    if (!combined.empty()) combined += "\n";
-                    combined += text;
-                }
+            g_hw_inference_total_us += runResult.inference_us;
+
+            const size_t reportCount = std::min(local_queue.size(), runResult.outputs.size());
+            for (size_t i = 0; i < reportCount; ++i) {
+                const auto& req = local_queue[i];
+                const auto& combined = runResult.outputs[i];
                 DBG_LOG(std::string("[rslt_cb new-mt]") + combined);
-                if (i < local_queue.size())
-                {
-                    const auto& req = local_queue[i];
-                    prof::BatchAggregator::Get().RecordBatch(
-                        req.windowDecoded,
-                        req.windowSelected,
-                        req.decode_total_us,
-                        req.scale_total_us,
-                        req.tensor_total_us,
-                        cb_inference_us,
-                        req.pipeline_us,
-                        req.prompt,
-                        combined);
-                    if (req.seg_has_pts)
-                        RecordJsonSegmentFromTimes(req.seg_start_sec, req.seg_end_sec, combined);
-                    else
-                        RecordJsonSegmentFromTimes(0.0, 0.0, combined);
-                }
-                ++i;
+                prof::BatchAggregator::Get().RecordBatch(
+                    req.windowDecoded,
+                    req.windowSelected,
+                    req.decode_total_us,
+                    req.scale_total_us,
+                    req.tensor_total_us,
+                    runResult.inference_us,
+                    req.pipeline_us,
+                    req.prompt,
+                    combined);
+                if (req.seg_has_pts)
+                    RecordJsonSegmentFromTimes(req.seg_start_sec, req.seg_end_sec, combined);
+                else
+                    RecordJsonSegmentFromTimes(0.0, 0.0, combined);
             }
-            generation_info_collector.generations_info.clear();
         }
     });
     new_cb_proc_running = true;
@@ -260,7 +345,6 @@ void ProcessCBQueueAsync()
     auto& generation_info_collector = GetCachedGenerationInfoCollector();
     generation_info_collector.set_start_time(std::chrono::steady_clock::now());
 
-    int req_i = 0;
     std::cout << "Processing " << g_batchConfig.cb_batch_size << " CB requests..." << std::endl;
     std::vector<ov::Tensor> empty_images;
 
@@ -271,7 +355,7 @@ void ProcessCBQueueAsync()
     }
 
     auto cb_end = std::chrono::high_resolution_clock::now();
-    std::cout << "Number of batch:" << req_i << std::endl;
+    std::cout << "Number of batch:" << g_cbInferenceQueue.size() << std::endl;
     std::cout << "CB total time: " << std::chrono::duration_cast<std::chrono::milliseconds>(cb_end - cb_start).count() << " ms" << std::endl;
     StartCBThreadsIfEnabled();
     g_cbInferenceQueue.clear();
@@ -302,109 +386,67 @@ void ReportCBQueueAsync()
     for (auto& generation_info : generation_info_collector.generations_info)
     {
         auto outputs = generation_info.generation_handle->read_all();
+        size_t outputTokens = 0;
         std::string combined;
         combined.reserve(1024);
         for (size_t k = 0; k < outputs.size(); ++k)
         {
+            outputTokens += outputs[k].generated_ids.size();
             auto text = tokenizer.decode(outputs[k].generated_ids);
             if (!combined.empty())
                 combined += "\n";
             combined += text;
         }
+        AddVLMTokenTotals(generation_info.input_len, outputTokens);
         DBG_LOG(std::string("[rslt_cb of batch NO. ") + std::to_string(i + 1) + ":]\n " + combined);
         i++;
     }
+    generation_info_collector.reset();
 }
 
 void ProcessCBQueueAndReport()
 {
     auto cb_start = std::chrono::high_resolution_clock::now();
     auto& pipe = GetCachedCBPipeline();
-    auto& generation_info_collector = GetCachedGenerationInfoCollector();
-    generation_info_collector.set_start_time(std::chrono::steady_clock::now());
-
-    int req_i = 0;
     std::cout << "Processing " << g_batchConfig.cb_batch_size << " CB requests..." << std::endl;
-    std::vector<ov::Tensor> empty_images;
-
-    if (cb_batch_size == 1)
+    for (const auto& req : g_cbInferenceQueue)
     {
-        for (auto& req : g_cbInferenceQueue)
-        {
-            DBG_LOG(std::string("Enqueue CB request batchIndex=") + std::to_string(req.batchIndex));
-            generation_info_collector.add_generation(&pipe, req.batchIndex, req.prompt, empty_images, req.tensors, req.sampling_params, false);
-            auto handle = generation_info_collector.generations_info[req_i].generation_handle;
-            while (handle->get_status() != ov::genai::GenerationStatus::FINISHED)
-                pipe.step();
-            req_i++;
-        }
+        DBG_LOG(std::string("Enqueue CB request batchIndex=") + std::to_string(req.batchIndex));
     }
-    else
-    {
-        for (auto& req : g_cbInferenceQueue)
-        {
-            DBG_LOG(std::string("Enqueue CB request batchIndex=") + std::to_string(req.batchIndex));
-            generation_info_collector.add_generation(&pipe, req.batchIndex, req.prompt, empty_images, req.tensors, req.sampling_params, false);
-            req_i++;
-        }
-        while (pipe.has_non_finished_requests())
-        {
-            pipe.step();
-        }
-    }
-
-    while (pipe.has_non_finished_requests())
-    {
-        pipe.step();
-    }
-    auto cb_end = std::chrono::high_resolution_clock::now();
+    auto runResult = RunCBBatchRequests(g_cbInferenceQueue);
+    auto cb_end = cb_start + std::chrono::microseconds(runResult.inference_us);
 
     ov::genai::PipelineMetrics metrics = pipe.get_metrics();
     std::cout << "CB Metrics:" << std::endl;
     std::cout << "Cache Usage: " << metrics.cache_usage << std::endl;
     std::cout << "metrics.max_cache_usage:" << metrics.max_cache_usage << std::endl;
     std::cout << "Scheduled Requests:" << metrics.scheduled_requests << std::endl;
-    std::cout << "Number of batch:" << req_i << std::endl;
+    std::cout << "Number of batch:" << g_cbInferenceQueue.size() << std::endl;
     std::cout << "current CB total time: " << std::chrono::duration_cast<std::chrono::milliseconds>(cb_end - cb_start).count() << " ms" << std::endl;
-    g_hw_inference_total_us += std::chrono::duration_cast<std::chrono::microseconds>(cb_end - cb_start).count();
-    auto tokenizer = pipe.get_tokenizer();
-    const uint64_t cb_inference_us = std::chrono::duration_cast<std::chrono::microseconds>(cb_end - cb_start).count();
-    size_t i = 0;
-    for (auto& generation_info : generation_info_collector.generations_info)
+    g_hw_inference_total_us += runResult.inference_us;
+    const uint64_t cb_inference_us = runResult.inference_us;
+    const size_t reportCount = std::min(g_cbInferenceQueue.size(), runResult.outputs.size());
+    for (size_t i = 0; i < reportCount; ++i)
     {
         report_idx++;
-        auto outputs = generation_info.generation_handle->read_all();
-        std::string combined;
-        combined.reserve(1024);
-        for (size_t k = 0; k < outputs.size(); ++k)
-        {
-            auto text = tokenizer.decode(outputs[k].generated_ids);
-            if (!combined.empty())
-                combined += "\n";
-            combined += text;
-        }
+        const std::string& combined = runResult.outputs[i];
         DBG_LOG(std::string("[rslt_cb of batch NO. ") + std::to_string(report_idx) + ":]\n " + combined);
-        if (i < g_cbInferenceQueue.size())
-        {
-            const auto& req = g_cbInferenceQueue[i];
-            prof::BatchAggregator::Get().RecordBatch(
-                req.windowDecoded,
-                req.windowSelected,
-                req.decode_total_us,
-                req.scale_total_us,
-                req.tensor_total_us,
-                cb_inference_us,
-                req.pipeline_us,
-                req.prompt,
-                combined);
-            if (req.seg_has_pts)
-                RecordJsonSegmentFromTimes(req.seg_start_sec, req.seg_end_sec, combined);
-            else
-                RecordJsonSegmentFromTimes(0.0, 0.0, combined);
-        }
-        ++i;
+        const auto& req = g_cbInferenceQueue[i];
+        prof::BatchAggregator::Get().RecordBatch(
+            req.windowDecoded,
+            req.windowSelected,
+            req.decode_total_us,
+            req.scale_total_us,
+            req.tensor_total_us,
+            cb_inference_us,
+            req.pipeline_us,
+            req.prompt,
+            combined);
+        if (req.seg_has_pts)
+            RecordJsonSegmentFromTimes(req.seg_start_sec, req.seg_end_sec, combined);
+        else
+            RecordJsonSegmentFromTimes(0.0, 0.0, combined);
     }
-    generation_info_collector.generations_info.clear();
     g_cbInferenceQueue.clear();
     g_cbInferenceQueue.shrink_to_fit();
 }

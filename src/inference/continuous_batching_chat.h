@@ -102,7 +102,7 @@ public:
         explicit SequenceInfo(std::chrono::steady_clock::time_point& start_time_)
             : start_time(start_time_) {}
 
-        void update();
+        void update(size_t new_tokens);
     };
         ov::genai::GenerationHandle generation_handle;
     std::chrono::steady_clock::time_point start_time;
@@ -131,6 +131,7 @@ public:
     size_t run();
     void print_statistics();
     bool isCompleted();
+    void reset();
 
     CBMutex mutex;
     std::vector<GenerationInfo> generations_info;

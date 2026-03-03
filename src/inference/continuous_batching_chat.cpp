@@ -107,19 +107,23 @@ GenerationInfo::GenerationInfo(ov::genai::GenerationHandle generation_handle_, s
     start_time = std::chrono::steady_clock::now();
 }
 
-void GenerationInfo::SequenceInfo::update()
+void GenerationInfo::SequenceInfo::update(size_t new_tokens)
 {
+    if (new_tokens == 0)
+    {
+        return;
+    }
     auto new_read_time = std::chrono::steady_clock::now();
     if (last_read_time.time_since_epoch() == std::chrono::milliseconds::zero())
     {
         ttft = std::chrono::duration_cast<std::chrono::milliseconds>(new_read_time - start_time);
     }
-    else
+    else if (num_output_tokens > 0)
     {
         cumulated_tpot += std::chrono::duration_cast<std::chrono::milliseconds>(new_read_time - last_read_time);
         mean_tpot = cumulated_tpot / num_output_tokens;
     }
-    num_output_tokens++;
+    num_output_tokens += new_tokens;
     last_read_time = new_read_time;
 }
 
@@ -129,14 +133,21 @@ void GenerationInfo::update_sequence(int64_t sequence_id)
     {
         sequences_info.emplace(sequence_id, SequenceInfo(start_time));
     }
-    sequences_info.at(sequence_id).update();
+    sequences_info.at(sequence_id).update(1);
 }
 
 void GenerationInfo::update(ov::genai::GenerationOutputs &outputs)
 {
     for (auto const &output : outputs)
     {
-        update_sequence(output.first);
+        if (!output.second.generated_ids.empty())
+        {
+            if (sequences_info.find(output.first) == sequences_info.end())
+            {
+                sequences_info.emplace(output.first, SequenceInfo(start_time));
+            }
+            sequences_info.at(output.first).update(output.second.generated_ids.size());
+        }
     }
 }
 
@@ -196,23 +207,29 @@ void GenerationInfoCollector::add_generation(ov::genai::ContinuousBatchingPipeli
     //    sampling_params.num_assistant_tokens = 5; // enable static speculative decoding
     //    // sampling_params.assistant_confidence_threshold = 0.4f; // dynamic speculative decoding
     //}
+    const auto tokenized = pipe->get_tokenizer().encode(prompt);
+    const size_t input_len = tokenized.input_ids.get_shape().size() > 1 ? tokenized.input_ids.get_shape()[1] : 0;
     ov::genai::GenerationHandle generation_handle = pipe->add_request(request_id, prompt, sampling_params);
     CBLockGuard lock(mutex);
-    generations_info.emplace_back(std::move(generation_handle), 0);
+    generations_info.emplace_back(std::move(generation_handle), input_len);
 }
 void GenerationInfoCollector::add_generation(ov::genai::ContinuousBatchingPipeline *pipe, size_t request_id,
     std::string prompt, std::vector<ov::Tensor>& images, ov::genai::GenerationConfig sampling_params,bool is_speculative_decoding_enabled)
 {
+    const auto tokenized = pipe->get_tokenizer().encode(prompt);
+    const size_t input_len = tokenized.input_ids.get_shape().size() > 1 ? tokenized.input_ids.get_shape()[1] : 0;
     ov::genai::GenerationHandle generation_handle = pipe->add_request(request_id, prompt, images, sampling_params);
     CBLockGuard lock(mutex);
-    generations_info.emplace_back(std::move(generation_handle), 0);
+    generations_info.emplace_back(std::move(generation_handle), input_len);
 }
 void GenerationInfoCollector::add_generation(ov::genai::ContinuousBatchingPipeline* pipe, size_t request_id,
     std::string prompt, std::vector<ov::Tensor>& images, std::vector<ov::Tensor>& videos, ov::genai::GenerationConfig sampling_params, bool is_speculative_decoding_enabled)
 {
+    const auto tokenized = pipe->get_tokenizer().encode(prompt);
+    const size_t input_len = tokenized.input_ids.get_shape().size() > 1 ? tokenized.input_ids.get_shape()[1] : 0;
     ov::genai::GenerationHandle generation_handle = pipe->add_request(request_id, prompt, images, videos, sampling_params);
     CBLockGuard lock(mutex);
-    generations_info.emplace_back(std::move(generation_handle), 0);
+    generations_info.emplace_back(std::move(generation_handle), input_len);
 }
 
 size_t GenerationInfoCollector::run()
@@ -241,6 +258,13 @@ bool GenerationInfoCollector::isCompleted()
 {
     CBLockGuard lock(mutex);
     return num_finished == generations_info.size();
+}
+
+void GenerationInfoCollector::reset()
+{
+    CBLockGuard lock(mutex);
+    generations_info.clear();
+    num_finished = 0;
 }
 void GenerationInfoCollector::print_statistics()
 {

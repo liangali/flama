@@ -341,12 +341,16 @@ void RunBatchSW()
         if (useN <= 1)
         {
             prompt = "请描述这张图片: <image>.";
-            out = pipe.generate(prompt, useN == 1 ? ov::genai::image(tensors.back()) : ov::genai::image(tensors[0]));
+            auto result = pipe.generate(prompt, useN == 1 ? ov::genai::image(tensors.back()) : ov::genai::image(tensors[0]));
+            AddVLMTokenTotalsFromVLMResults(result);
+            out = static_cast<std::string>(result);
         }
         else if (useN <= maxFrames)
         {
             prompt = g_commonConfig.prompt_video;
-            out = pipe.generate(prompt, ov::genai::videos(tensors));
+            auto result = pipe.generate(prompt, ov::genai::videos(tensors));
+            AddVLMTokenTotalsFromVLMResults(result);
+            out = static_cast<std::string>(result);
         }
         else
         {
@@ -411,8 +415,6 @@ void RunBatchHW()
         auto &frameProfiler = prof::FrameProfiler::Get();
         frameProfiler.MarkStageBegin(prof::Stage::Inference);
         auto tInf0 = std::chrono::steady_clock::now();
-        auto &pipe = GetCachedCBPipeline();
-        auto &generation_info_collector = GetCachedGenerationInfoCollector();
 
         ov::genai::GenerationConfig sampling_params;
         sampling_params.max_new_tokens = 256;
@@ -436,6 +438,7 @@ void RunBatchHW()
                     params.batchIndex = (size_t)bs.batchIndex;
                     params.prompt = prompt;
                     params.tensors = std::move(tensors);
+                    params.use_video_input = true;
                     params.sampling_params = sampling_params;
                     params.windowDecoded = bs.windowDecoded;
                     params.windowSelected = bs.windowSelected;
@@ -510,13 +513,17 @@ void RunBatchHW()
             if (useN <= 1)
             {
                 prompt = "请描述这张图片: <image>.";
-                out = pipe.generate(prompt, useN == 1 ? ov::genai::image(tensors.back()) : ov::genai::image(tensors[0]), ov::genai::generation_config(config));
+                auto result = pipe.generate(prompt, useN == 1 ? ov::genai::image(tensors.back()) : ov::genai::image(tensors[0]), ov::genai::generation_config(config));
+                AddVLMTokenTotalsFromVLMResults(result);
+                out = static_cast<std::string>(result);
                 DBG_LOG(std::string("[VLM] Inference (batch ") + std::to_string(bs.batchIndex) + ") Output: " + out);
             }
             else if (useN <= maxFrames)
             {
                 prompt = g_commonConfig.prompt_video;
-                out = pipe.generate(prompt, ov::genai::videos(tensors), ov::genai::generation_config(config));
+                auto result = pipe.generate(prompt, ov::genai::videos(tensors), ov::genai::generation_config(config));
+                AddVLMTokenTotalsFromVLMResults(result);
+                out = static_cast<std::string>(result);
                 DBG_LOG(std::string("[VLM] Inference (batch ") + std::to_string(bs.batchIndex) + ") Output: " + out);
             }
             else

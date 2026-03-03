@@ -60,6 +60,7 @@ struct CBInferenceParams {
     size_t batchIndex;
     std::string prompt;
     std::vector<ov::Tensor> tensors;
+    bool use_video_input = true;
     ov::genai::GenerationConfig sampling_params;
     uint64_t windowDecoded = 0;
     uint64_t windowSelected = 0;

@@ -87,6 +87,7 @@ int main(int argc, char *argv[])
     std::cout << "Log g_fsConfig/g_batchConfig/g_commonConfig/g_vlmConfig end" << std::endl;
 
     g_vlmJsonCollector.Reset();
+    ResetVLMTokenTotals();
 
     bool useHardware = g_commonConfig.hw_decode;
     bool useSoftware = !useHardware;
@@ -349,6 +350,8 @@ int main(int argc, char *argv[])
     }
     if (!WriteVlmJsonFile(jsonOutPath, g_vlmJsonCollector.Snapshot()))
         all_ok = false;
+
+    PrintVLMTokenTotals("[VLM] Run totals");
 
     return all_ok ? 0 : 1;
 }

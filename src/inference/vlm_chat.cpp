@@ -15,7 +15,9 @@ using Microsoft::WRL::ComPtr;
 #include "../utils/profiling.h"
 #include "../utils/debug.h"
 #include <mutex>
+#include <atomic>
 #include <fstream>
+#include <iostream>
 #include "../utils/util.h"
 #ifdef _WIN32
 #include <windows.h>
@@ -76,6 +78,11 @@ namespace
         return *state;
     #endif
     }
+
+    std::atomic<uint64_t> g_totalInputTokens{0};
+    std::atomic<uint64_t> g_totalOutputTokens{0};
+    std::atomic<uint64_t> g_totalTokenRequests{0};
+
     inline std::string SanitizeCSV(const std::string &in)
     {
         std::string out;
@@ -104,6 +111,54 @@ namespace
         }
         (*st.file) << frameIdx << ',' << batchSize << ',' << SanitizeCSV(st.inputFileName) << ',' << SanitizeCSV(prompt) << ',' << SanitizeCSV(text) << '\n';
     }
+}
+
+void ResetVLMTokenTotals()
+{
+    g_totalInputTokens.store(0, std::memory_order_relaxed);
+    g_totalOutputTokens.store(0, std::memory_order_relaxed);
+    g_totalTokenRequests.store(0, std::memory_order_relaxed);
+}
+
+void AddVLMTokenTotals(uint64_t inputTokens, uint64_t outputTokens)
+{
+    AddVLMTokenTotalsWithRequestCount(inputTokens, outputTokens, 1);
+}
+
+void AddVLMTokenTotalsWithRequestCount(uint64_t inputTokens, uint64_t outputTokens, uint64_t requestCount)
+{
+    g_totalInputTokens.fetch_add(inputTokens, std::memory_order_relaxed);
+    g_totalOutputTokens.fetch_add(outputTokens, std::memory_order_relaxed);
+    g_totalTokenRequests.fetch_add(requestCount, std::memory_order_relaxed);
+}
+
+void AddVLMTokenTotalsFromPerfMetrics(ov::genai::PerfMetrics& perfMetrics)
+{
+    AddVLMTokenTotals(perfMetrics.get_num_input_tokens(), perfMetrics.get_num_generated_tokens());
+}
+
+void AddVLMTokenTotalsFromVLMResults(ov::genai::VLMDecodedResults& results)
+{
+    AddVLMTokenTotalsFromPerfMetrics(results.perf_metrics);
+}
+
+VLMTokenTotals GetVLMTokenTotals()
+{
+    VLMTokenTotals totals;
+    totals.input_tokens = g_totalInputTokens.load(std::memory_order_relaxed);
+    totals.output_tokens = g_totalOutputTokens.load(std::memory_order_relaxed);
+    totals.requests = g_totalTokenRequests.load(std::memory_order_relaxed);
+    return totals;
+}
+
+void PrintVLMTokenTotals(const std::string& prefix)
+{
+    const auto totals = GetVLMTokenTotals();
+    std::cout << prefix
+              << " total_input_tokens=" << totals.input_tokens
+              << " total_output_tokens=" << totals.output_tokens
+              << " total_requests=" << totals.requests
+              << std::endl;
 }
 
 void SetVLMResultFile(const std::string &path)
@@ -339,16 +394,22 @@ void ProcessSampleAndMaybeInfer(const ov::Tensor &image_tensor)
     std::string out;
     if (useN == 1) {
         prompt = "请描述这张图: <image>.";
-        out = pipe.generate(prompt, ov::genai::image(st.buffer.back()));
+        auto result = pipe.generate(prompt, ov::genai::image(st.buffer.back()));
+        AddVLMTokenTotalsFromVLMResults(result);
+        out = static_cast<std::string>(result);
     DBG_LOG(std::string("[VLM] Inference (frame ") + std::to_string(frameIdx) + ") Output: " + out);
         AppendResultRow(frameIdx, 1, prompt, out);
     } else {
         prompt = g_commonConfig.prompt_video;
         try {
-            out = pipe.generate(prompt, ov::genai::videos(st.buffer));
+            auto result = pipe.generate(prompt, ov::genai::videos(st.buffer));
+            AddVLMTokenTotalsFromVLMResults(result);
+            out = static_cast<std::string>(result);
         } catch (const std::exception &ex) {
             std::cerr << "[VLM] Multi-image generate failed: " << ex.what() << "; fallback single image." << std::endl;
-            out = pipe.generate("请描述这张图: <image>.", ov::genai::image(st.buffer.back()));
+            auto result = pipe.generate("请描述这张图: <image>.", ov::genai::image(st.buffer.back()));
+            AddVLMTokenTotalsFromVLMResults(result);
+            out = static_cast<std::string>(result);
             useN = 1;
         }
     DBG_LOG(std::string("[VLM] Inference (frame ") + std::to_string(frameIdx) + ", batch=" + std::to_string(useN) + ") Output: " + out);
@@ -404,16 +465,22 @@ void ProcessInfer(const std::vector<ov::Tensor> &buffer)
     frameProfiler.MarkStageBegin(prof::Stage::Inference);
     if (useN == 1) {
         prompt = "请描述这张图: <image>.";
-        out = pipe.generate(prompt, ov::genai::image(buffer.back()));
+        auto result = pipe.generate(prompt, ov::genai::image(buffer.back()));
+        AddVLMTokenTotalsFromVLMResults(result);
+        out = static_cast<std::string>(result);
     DBG_LOG(std::string("[VLM] Inference frame ") + std::to_string(GetSampleState().frameCounter) + ") Output: " + out);
 
     } else {
         prompt = g_commonConfig.prompt_video;
         try {
-            out = pipe.generate(prompt, ov::genai::videos(buffer));
+            auto result = pipe.generate(prompt, ov::genai::videos(buffer));
+            AddVLMTokenTotalsFromVLMResults(result);
+            out = static_cast<std::string>(result);
         } catch (const std::exception &ex) {
             std::cerr << "[VLM] Multi-image generate failed: " << ex.what() << "; fallback single image." << std::endl;
-            out = pipe.generate("请描述这张图: <image>.", ov::genai::image(buffer.back()));
+            auto result = pipe.generate("请描述这张图: <image>.", ov::genai::image(buffer.back()));
+            AddVLMTokenTotalsFromVLMResults(result);
+            out = static_cast<std::string>(result);
             useN = 1;
         }
     DBG_LOG(std::string("[VLM] Inference (frame ") + std::to_string(GetSampleState().frameCounter) + ", batch=" + std::to_string(useN) + ") Output: " + out);
