@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import json
 import os
 import subprocess
 import sys
@@ -30,102 +31,16 @@ ASR_MODEL_REL = Path("Huggingface") / "Qwen3-ASR-0.6B"
 SCRIPT_DIR = Path(__file__).resolve().parent
 print(SCRIPT_DIR)
 DEFAULT_EXE_DIR = SCRIPT_DIR / "Release"
+DEFAULT_PROMPTS_FILE = SCRIPT_DIR / "prompt.json"
 
 DEFAULT_DEVICE = "GPU"
 ASR_MAX_NEW_TOKENS = "500"
 
-# ---------------------------------------------------------------------------
-# Test cases: (label, text_to_synthesize)
-# Texts are sized to produce approximately 30s / 60s / 120s audio at typical
-# Chinese TTS speed (~4 chars/sec).  Actual duration depends on the model.
-# ---------------------------------------------------------------------------
-TEST_CASES: List[Tuple[str, str]] = [
-    (
-        # ~30 seconds (~120 Chinese characters)
-        "short_30s",
-        (
-            "人工智能是计算机科学的一个重要分支，致力于研究和开发能够模拟人类智能的系统。"
-            "近年来，随着深度学习技术的快速发展，人工智能在图像识别、语音处理和自然语言"
-            "理解等领域取得了突破性进展。未来，它将在医疗、教育和交通等领域发挥更大作用。"
-        ),
-    ),
-    (
-        # ~60 seconds (~240 Chinese characters)
-        "medium_60s",
-        (
-            "OpenVINO 是英特尔推出的开源深度学习推理框架，专为在各种英特尔硬件上部署人工智能"
-            "推理任务而设计，支持 CPU、集成显卡、独立显卡以及 VPU 等多种设备。"
-            "它通过模型优化和硬件加速，显著降低了推理延迟并提升了吞吐量，使开发者能够在边缘"
-            "设备和云端服务器上高效运行图像分类、目标检测、语音识别和自然语言处理等各类 AI 任务。"
-            "借助 OpenVINO，工程师可以将训练好的模型从主流深度学习框架无缝转换并进行优化部署。"
-        ),
-    ),
-    (
-        # ~120 seconds (~480 Chinese characters)
-        "long_120s",
-        (
-            "大语言模型是近年来人工智能领域最引人瞩目的技术突破之一。这类模型通过在海量文本数据上"
-            "进行预训练，学习到了语言的语法结构、语义关系以及大量的世界知识，从而具备了理解和生成"
-            "自然语言的强大能力。以 GPT 系列和通义千问为代表的大语言模型，不仅能够完成问答、摘要、"
-            "翻译等传统自然语言处理任务，还能进行代码编写、数学推理和创意写作等复杂任务。"
-            "然而，大语言模型的训练和推理都需要消耗大量的计算资源，这给实际部署带来了巨大挑战。"
-            "为了解决这一问题，研究人员提出了模型量化、知识蒸馏和稀疏化等多种模型压缩技术，"
-            "旨在在保持模型性能的同时大幅降低其计算和存储开销。英特尔的 OpenVINO 工具包正是在这一"
-            "背景下发挥了重要作用，它能够将大语言模型高效地部署到各种英特尔硬件平台上，让更多"
-            "用户和场景都能够受益于先进的人工智能技术，推动 AI 在各行各业的广泛普及与应用。"
-        ),
-    ),
-    (
-        # ~30 seconds (~70 English words)
-        "en_short_30s",
-        (
-            "Artificial intelligence is one of the most transformative technologies of our time. "
-            "By enabling machines to learn from data and make decisions, AI is reshaping industries "
-            "ranging from healthcare and finance to transportation and entertainment. "
-            "As the technology continues to advance, its impact on society will only grow deeper."
-        ),
-    ),
-    (
-        # ~60 seconds (~140 English words)
-        "en_medium_60s",
-        (
-            "OpenVINO is an open-source toolkit developed by Intel for optimizing and deploying "
-            "deep learning inference across a wide range of Intel hardware, including CPUs, "
-            "integrated and discrete GPUs, and VPUs. "
-            "It enables developers to convert models trained in popular frameworks such as "
-            "PyTorch and TensorFlow into an optimized intermediate representation, "
-            "then run them efficiently on the target device. "
-            "By applying techniques like quantization and layer fusion, OpenVINO can dramatically "
-            "reduce latency and increase throughput, making it well suited for real-time applications "
-            "such as object detection, speech recognition, and natural language processing "
-            "in both edge and cloud environments."
-        ),
-    ),
-    (
-        # ~120 seconds (~280 English words)
-        "en_long_120s",
-        (
-            "Large language models represent one of the most significant breakthroughs in the history "
-            "of artificial intelligence. These models are trained on vast corpora of text data, "
-            "allowing them to learn grammar, semantics, and an enormous breadth of world knowledge. "
-            "As a result, they can understand and generate human language with remarkable fluency, "
-            "handling tasks as diverse as question answering, summarization, translation, "
-            "code generation, mathematical reasoning, and creative writing. "
-            "Models such as GPT-4 and Qwen have demonstrated that scale, when combined with "
-            "careful training techniques, leads to emergent capabilities that were not explicitly "
-            "programmed but arise naturally from the learning process. "
-            "However, training and running these models requires immense computational resources, "
-            "posing significant challenges for practical deployment. "
-            "Researchers have responded with a range of model compression strategies, "
-            "including quantization, knowledge distillation, and structured pruning, "
-            "all aimed at preserving model quality while reducing memory footprint and inference cost. "
-            "Intel's OpenVINO toolkit plays an important role in this ecosystem by providing "
-            "hardware-aware optimizations that allow large language models to run efficiently "
-            "on Intel CPUs and GPUs, bringing the benefits of advanced AI to a much broader "
-            "set of users and deployment scenarios across industry and everyday life."
-        ),
-    ),
-]
+
+def load_test_cases(prompts_file: Path) -> List[Tuple[str, str]]:
+    with prompts_file.open(encoding="utf-8") as f:
+        data = json.load(f)
+    return [(entry["label"], entry["text"]) for entry in data]
 
 
 # ---------------------------------------------------------------------------
@@ -304,7 +219,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         default=None,
-        help="Directory for generated .wav files (default: <exe-dir>/tts_asr_test_<timestamp>)",
+        help="Directory for generated .wav files (default: <script-dir>/tts_asr_test_<timestamp>)",
+    )
+    parser.add_argument(
+        "--prompts",
+        default=str(DEFAULT_PROMPTS_FILE),
+        help=f"JSON file with test cases (default: {DEFAULT_PROMPTS_FILE})",
     )
     return parser.parse_args()
 
@@ -344,7 +264,7 @@ def main() -> int:
     if args.output_dir:
         output_dir = Path(args.output_dir)
     else:
-        output_dir = exe_dir / f"tts_asr_test_{timestamp}"
+        output_dir = SCRIPT_DIR / "output" / f"tts_asr_test_{timestamp}"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     env = build_env(exe_dir)
@@ -359,14 +279,18 @@ def main() -> int:
     print(f"Output dir: {output_dir}")
     print()
 
+    test_cases = load_test_cases(Path(args.prompts))
+    print(f"Prompts   : {args.prompts} ({len(test_cases)} cases)")
+    print()
+
     results: List[dict] = []
     total_start = _dt.datetime.now()
 
-    for idx, (label, ref_text) in enumerate(TEST_CASES):
+    for idx, (label, ref_text) in enumerate(test_cases):
         wav_name = f"tts_{label}_{timestamp}.wav"
         wav_path = output_dir / wav_name
 
-        print(f"[{idx + 1}/{len(TEST_CASES)}] Case: {label}")
+        print(f"[{idx + 1}/{len(test_cases)}] Case: {label}")
         print(f"  TTS input : {ref_text}")
 
         # --- TTS ---
