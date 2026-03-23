@@ -314,6 +314,8 @@ def main() -> int:
                     "wav": str(wav_path),
                     "tts_dur": tts_dur,
                     "asr_dur": _dt.timedelta(0),
+                    "tts_raw": tts_out,
+                    "asr_raw": "",
                 }
             )
             print()
@@ -335,6 +337,8 @@ def main() -> int:
                     "wav": str(wav_path),
                     "tts_dur": tts_dur,
                     "asr_dur": _dt.timedelta(0),
+                    "tts_raw": tts_out,
+                    "asr_raw": "",
                 }
             )
             print()
@@ -375,6 +379,8 @@ def main() -> int:
                 "wav": str(wav_path),
                 "tts_dur": tts_dur,
                 "asr_dur": asr_dur,
+                "tts_raw": tts_out,
+                "asr_raw": asr_out,
             }
         )
         print()
@@ -432,7 +438,9 @@ def main() -> int:
             f.write(f"  Reference: {r['ref']}\n")
             f.write(f"  ASR text : {r['asr']}\n")
             f.write(f"  CER      : {r['cer']:.2f}%\n")
-            f.write(f"  Score    : {r['score']:.2f}/100\n\n")
+            f.write(f"  Score    : {r['score']:.2f}/100\n")
+            f.write(f"  TTS raw  :\n{r.get('tts_raw', '')}\n")
+            f.write(f"  ASR raw  :\n{r.get('asr_raw', '')}\n\n")
         if valid_scores:
             f.write(f"Average CER  : {avg_cer:.2f}%\n")
             f.write(f"Overall Score: {avg_score:.2f}/100\n")
