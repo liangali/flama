@@ -30,8 +30,8 @@ The following dependencies are managed via vcpkg:
 
 The following dependencies need to be installed manually:
 
-- **Intel OpenVINO Runtime 2025.4+**: AI inference engine ([Download](https://www.intel.com/content/www/us/en/developer/tools/openvino-toolkit/overview.html))
-- **OpenVINO GenAI 2025.4+**: Visual Language Model support ([Download](https://github.com/openvinotoolkit/openvino.genai))
+- **Intel OpenVINO Runtime 2026.1+**: AI inference engine ([Download](https://www.intel.com/content/www/us/en/developer/tools/openvino-toolkit/overview.html))
+- **OpenVINO GenAI 2026.1+**: Visual Language Model support ([Download](https://github.com/openvinotoolkit/openvino.genai))
 
 The following dependencies are bundled in the repository:
 
@@ -73,8 +73,8 @@ Download the pre-built archives and extract them:
 Extract to your preferred location. Example paths used in this guide:
 
 ```
-D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64
-D:\library\openvino.genai\openvino_genai_windows_2025.4.2.0_x86_64
+D:\library\openvino\openvino_toolkit_windows_2026.1.0.xxxxxxxx_x86_64
+D:\library\openvino.genai\openvino_genai_windows_2026.1.0_x86_64
 ```
 
 ### 3. oneVPL (Bundled)
@@ -136,9 +136,9 @@ cd build
 
 cmake .. -G "Visual Studio 17 2022" -A x64 `
   -DCMAKE_TOOLCHAIN_FILE="C:\vcpkg\scripts\buildsystems\vcpkg.cmake" `
-  -DOpenVINO_DIR="D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\cmake" `
-  -DOpenVINOGenAI_DIR="D:\library\openvino.genai\openvino_genai_windows_2025.4.2.0_x86_64\runtime\cmake" `
-  -DTBB_DIR="D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\3rdparty\tbb\lib\cmake\TBB" `
+  -DOpenVINO_DIR="D:\library\openvino\openvino_toolkit_windows_2026.1.0.xxxxxxxx_x86_64\runtime\cmake" `
+  -DOpenVINOGenAI_DIR="D:\library\openvino.genai\openvino_genai_windows_2026.1.0_x86_64\runtime\cmake" `
+  -DTBB_DIR="D:\library\openvino\openvino_toolkit_windows_2026.1.0.xxxxxxxx_x86_64\runtime\3rdparty\tbb\lib\cmake\TBB" `
   -DVPL_DIR="%cd%\thirdparty\_vplinstall\lib\cmake\vpl"
 
 cmake --build . --config Release

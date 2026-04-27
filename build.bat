@@ -12,14 +12,34 @@ echo.
 REM ==========================================
 REM Define dependency paths (modify as needed)
 REM ==========================================
-set "OPENVINO_DIR=D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\cmake"
-set "OPENVINO_GENAI_DIR=D:\library\openvino.genai\openvino_genai_windows_2025.4.2.0_x86_64\runtime\cmake"
-set "TBB_DIR=D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\3rdparty\tbb\lib\cmake\TBB"
+if not defined OPENVINO_ROOT (
+    for /d %%D in ("D:\library\openvino\openvino_toolkit_windows_2026.1*") do set "OPENVINO_ROOT=%%~fD"
+)
+if not defined OPENVINO_GENAI_ROOT (
+    for /d %%D in ("D:\library\openvino.genai\openvino_genai_windows_2026.1*") do set "OPENVINO_GENAI_ROOT=%%~fD"
+)
+
+if defined OPENVINO_ROOT (
+    set "OPENVINO_DIR=%OPENVINO_ROOT%\runtime\cmake"
+    set "TBB_DIR=%OPENVINO_ROOT%\runtime\3rdparty\tbb\lib\cmake\TBB"
+) else (
+    set "OPENVINO_DIR="
+    set "TBB_DIR="
+)
+
+if defined OPENVINO_GENAI_ROOT (
+    set "OPENVINO_GENAI_DIR=%OPENVINO_GENAI_ROOT%\runtime\cmake"
+) else (
+    set "OPENVINO_GENAI_DIR="
+)
+
 set "VPL_DIR=%cd%\thirdparty\_vplinstall\lib\cmake\vpl"
 
 echo ==========================================
 echo Configuration Paths
 echo ==========================================
+echo OpenVINO_ROOT:      %OPENVINO_ROOT%
+echo OpenVINO_GenAI_ROOT:%OPENVINO_GENAI_ROOT%
 echo OpenVINO_DIR:       %OPENVINO_DIR%
 echo OpenVINOGenAI_DIR:  %OPENVINO_GENAI_DIR%
 echo TBB_DIR:            %TBB_DIR%
@@ -96,6 +116,7 @@ echo Configuring CMake...
 echo ===============================================
 cmake .. -G "Visual Studio 17 2022" -A x64 ^
   -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" ^
+    -DCMAKE_CXX_FLAGS="/utf-8" ^
   -DOpenVINO_DIR="%OPENVINO_DIR%" ^
   -DOpenVINOGenAI_DIR="%OPENVINO_GENAI_DIR%" ^
   -DTBB_DIR="%TBB_DIR%" ^

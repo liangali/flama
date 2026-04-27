@@ -23,10 +23,20 @@ if(OpenVINO_FOUND)
     message(STATUS "Found OpenVINO: ${OpenVINO_VERSION}")
 endif()
 
+set(REQUIRED_OPENVINO_VERSION "2026.1")
+if(DEFINED OpenVINO_VERSION AND OpenVINO_VERSION VERSION_LESS REQUIRED_OPENVINO_VERSION)
+    message(FATAL_ERROR "OpenVINO ${OpenVINO_VERSION} is too old. Require >= ${REQUIRED_OPENVINO_VERSION}")
+endif()
+
 # OpenVINO GenAI (separate package)
 find_package(OpenVINOGenAI REQUIRED)
 if(OpenVINOGenAI_FOUND)
     message(STATUS "Found OpenVINO GenAI: ${OpenVINOGenAI_VERSION}")
+endif()
+
+set(REQUIRED_OPENVINO_GENAI_VERSION "2026.1")
+if(DEFINED OpenVINOGenAI_VERSION AND OpenVINOGenAI_VERSION VERSION_LESS REQUIRED_OPENVINO_GENAI_VERSION)
+    message(FATAL_ERROR "OpenVINO GenAI ${OpenVINOGenAI_VERSION} is too old. Require >= ${REQUIRED_OPENVINO_GENAI_VERSION}")
 endif()
 
 # nlohmann_json
@@ -171,10 +181,12 @@ if(WIN32)
         get_filename_component(OPENVINO_BIN_DIR "${OpenVINO_DIR}/../../../bin/intel64/Release" ABSOLUTE)
     endif()
 
-    # Fallback: check common installation path
+    # Fallback: check common installation path (prefer 2026.1)
     if(NOT OPENVINO_BIN_DIR OR NOT EXISTS "${OPENVINO_BIN_DIR}")
-        if(EXISTS "D:/library/openvino/openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64/runtime/bin/intel64/Release")
-            set(OPENVINO_BIN_DIR "D:/library/openvino/openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64/runtime/bin/intel64/Release")
+        file(GLOB OPENVINO_RUNTIME_DIR_CANDIDATES "D:/library/openvino/openvino_toolkit_windows_2026.1*/runtime/bin/intel64/Release")
+        if(OPENVINO_RUNTIME_DIR_CANDIDATES)
+            list(SORT OPENVINO_RUNTIME_DIR_CANDIDATES ORDER DESCENDING)
+            list(GET OPENVINO_RUNTIME_DIR_CANDIDATES 0 OPENVINO_BIN_DIR)
         endif()
     endif()
 
@@ -211,10 +223,12 @@ if(WIN32)
         get_filename_component(GENAI_BIN_DIR "${OpenVINOGenAI_DIR}/../../../bin/intel64/Release" ABSOLUTE)
     endif()
 
-    # Fallback: check common installation path
+    # Fallback: check common installation path (prefer 2026.1)
     if(NOT GENAI_BIN_DIR OR NOT EXISTS "${GENAI_BIN_DIR}")
-        if(EXISTS "D:/library/openvino.genai/openvino_genai_windows_2025.4.2.0_x86_64/runtime/bin/intel64/Release")
-            set(GENAI_BIN_DIR "D:/library/openvino.genai/openvino_genai_windows_2025.4.2.0_x86_64/runtime/bin/intel64/Release")
+        file(GLOB OPENVINO_GENAI_RUNTIME_DIR_CANDIDATES "D:/library/openvino.genai/openvino_genai_windows_2026.1*/runtime/bin/intel64/Release")
+        if(OPENVINO_GENAI_RUNTIME_DIR_CANDIDATES)
+            list(SORT OPENVINO_GENAI_RUNTIME_DIR_CANDIDATES ORDER DESCENDING)
+            list(GET OPENVINO_GENAI_RUNTIME_DIR_CANDIDATES 0 GENAI_BIN_DIR)
         endif()
     endif()
 

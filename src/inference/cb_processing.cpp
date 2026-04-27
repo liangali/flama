@@ -16,6 +16,8 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <cstring>
+#include <stdexcept>
 
 #ifndef _WIN32
 #include <mutex>
@@ -111,6 +113,62 @@ struct CBBatchRunResult
     uint64_t inference_us = 0;
 };
 
+ov::Tensor PackFramesAsSingleVideoTensor(const std::vector<ov::Tensor>& frames)
+{
+    if (frames.empty())
+    {
+        throw std::runtime_error("PackFramesAsSingleVideoTensor: empty frame list");
+    }
+
+    const ov::Shape firstShape = frames.front().get_shape();
+    size_t h = 0;
+    size_t w = 0;
+    size_t c = 0;
+    if (firstShape.size() == 4)
+    {
+        if (firstShape[0] != 1)
+            throw std::runtime_error("PackFramesAsSingleVideoTensor: frame tensor N must be 1");
+        h = firstShape[1];
+        w = firstShape[2];
+        c = firstShape[3];
+    }
+    else if (firstShape.size() == 3)
+    {
+        h = firstShape[0];
+        w = firstShape[1];
+        c = firstShape[2];
+    }
+    else
+    {
+        throw std::runtime_error("PackFramesAsSingleVideoTensor: unsupported frame tensor shape");
+    }
+
+    if (c != 3)
+        throw std::runtime_error("PackFramesAsSingleVideoTensor: expected RGB channels == 3");
+
+    const size_t frameBytes = h * w * c;
+    const size_t packedFrameCount = std::max<size_t>(frames.size(), 4);
+    ov::Tensor packed(ov::element::u8, ov::Shape{packedFrameCount, h, w, c});
+    auto* dst = packed.data<uint8_t>();
+
+    for (size_t i = 0; i < packedFrameCount; ++i)
+    {
+        const ov::Tensor& srcFrame = frames[std::min(i, frames.size() - 1)];
+        const ov::Shape s = srcFrame.get_shape();
+        bool same = false;
+        if (s.size() == 4)
+            same = (s[0] == 1 && s[1] == h && s[2] == w && s[3] == c);
+        else if (s.size() == 3)
+            same = (s[0] == h && s[1] == w && s[2] == c);
+        if (!same)
+            throw std::runtime_error("PackFramesAsSingleVideoTensor: inconsistent frame shape");
+
+        std::memcpy(dst + i * frameBytes, srcFrame.data<const uint8_t>(), frameBytes);
+    }
+
+    return packed;
+}
+
 CBBatchRunResult RunCBBatchRequests(std::vector<CBInferenceParams>& requests)
 {
     CBBatchRunResult runResult;
@@ -138,7 +196,8 @@ CBBatchRunResult RunCBBatchRequests(std::vector<CBInferenceParams>& requests)
         std::vector<ov::Tensor> videoInputs;
         if (req.use_video_input)
         {
-            videoInputs = std::move(req.tensors);
+            ov::Tensor packedVideo = PackFramesAsSingleVideoTensor(req.tensors);
+            videoInputs.emplace_back(std::move(packedVideo));
         }
         else
         {
@@ -351,7 +410,16 @@ void ProcessCBQueueAsync()
     for (auto& req : g_cbInferenceQueue)
     {
         DBG_LOG(std::string("Enqueue CB request batchIndex=") + std::to_string(req.batchIndex));
-        generation_info_collector.add_generation(&pipe, req.batchIndex, req.prompt, empty_images, req.tensors, req.sampling_params, false);
+        std::vector<ov::Tensor> videos;
+        if (req.use_video_input)
+        {
+            videos.emplace_back(PackFramesAsSingleVideoTensor(req.tensors));
+        }
+        else
+        {
+            videos = req.tensors;
+        }
+        generation_info_collector.add_generation(&pipe, req.batchIndex, req.prompt, empty_images, videos, req.sampling_params, false);
     }
 
     auto cb_end = std::chrono::high_resolution_clock::now();

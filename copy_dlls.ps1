@@ -3,7 +3,16 @@
 $ErrorActionPreference = "Stop"
 
 # Target directory
-$targetDir = "D:\code\flama_code\flama\build\bin\Release"
+$targetDir = Join-Path $PSScriptRoot "build\bin\Release"
+
+function Get-LatestMatchingDir([string]$pattern) {
+    $items = Get-ChildItem -Path $pattern -Directory -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending
+    if ($items -and $items.Count -gt 0) {
+        return $items[0].FullName
+    }
+    return $null
+}
 
 # Ensure target directory exists
 if (-not (Test-Path $targetDir)) {
@@ -13,35 +22,37 @@ if (-not (Test-Path $targetDir)) {
 Write-Host "Copying DLLs to $targetDir..." -ForegroundColor Green
 
 # 1. OpenVINO Runtime DLLs
-$openvinoDir = "D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\bin\intel64\Release"
-if (Test-Path $openvinoDir) {
+$openvinoRoot = if ($env:OPENVINO_ROOT) { $env:OPENVINO_ROOT } else { Get-LatestMatchingDir "D:\library\openvino\openvino_toolkit_windows_2026.1*" }
+$openvinoDir = if ($openvinoRoot) { Join-Path $openvinoRoot "runtime\bin\intel64\Release" } else { $null }
+if ($openvinoDir -and (Test-Path $openvinoDir)) {
     Write-Host "  Copying OpenVINO Runtime DLLs..." -ForegroundColor Cyan
     Copy-Item "$openvinoDir\*.dll" -Destination $targetDir -Force
 }
 
 # 2. TBB DLLs
-$tbbDir = "D:\library\openvino\openvino_toolkit_windows_2025.4.2.20430.85e49f27be1_x86_64\runtime\3rdparty\tbb\bin"
-if (Test-Path $tbbDir) {
+$tbbDir = if ($openvinoRoot) { Join-Path $openvinoRoot "runtime\3rdparty\tbb\bin" } else { $null }
+if ($tbbDir -and (Test-Path $tbbDir)) {
     Write-Host "  Copying TBB DLLs..." -ForegroundColor Cyan
     Copy-Item "$tbbDir\*.dll" -Destination $targetDir -Force
 }
 
 # 3. OpenVINO GenAI DLLs
-$genaiDir = "D:\library\openvino.genai\openvino_genai_windows_2025.4.2.0_x86_64\runtime\bin\intel64\Release"
-if (Test-Path $genaiDir) {
+$genaiRoot = if ($env:OPENVINO_GENAI_ROOT) { $env:OPENVINO_GENAI_ROOT } else { Get-LatestMatchingDir "D:\library\openvino.genai\openvino_genai_windows_2026.1*" }
+$genaiDir = if ($genaiRoot) { Join-Path $genaiRoot "runtime\bin\intel64\Release" } else { $null }
+if ($genaiDir -and (Test-Path $genaiDir)) {
     Write-Host "  Copying OpenVINO GenAI DLLs..." -ForegroundColor Cyan
     Copy-Item "$genaiDir\*.dll" -Destination $targetDir -Force
 }
 
 # 4. VPL DLLs
-$vplDir = "D:\code\flama_code\flama\thirdparty\_vplinstall\bin"
+$vplDir = Join-Path $PSScriptRoot "thirdparty\_vplinstall\bin"
 if (Test-Path $vplDir) {
     Write-Host "  Copying VPL DLLs..." -ForegroundColor Cyan
     Copy-Item "$vplDir\*.dll" -Destination $targetDir -Force
 }
 
 # 5. vcpkg DLLs (FFmpeg, etc.)
-$vcpkgDir = "D:\code\flama_code\flama\build\vcpkg_installed\x64-windows\bin"
+$vcpkgDir = Join-Path $PSScriptRoot "build\vcpkg_installed\x64-windows\bin"
 if (Test-Path $vcpkgDir) {
     Write-Host "  Copying vcpkg DLLs (FFmpeg, etc.)..." -ForegroundColor Cyan
     Copy-Item "$vcpkgDir\*.dll" -Destination $targetDir -Force
