@@ -52,7 +52,13 @@ void UpdateBatchSegmentTiming(double pts_sec)
 
 void RecordJsonSegmentFromTimes(double start_sec, double end_sec, const std::string &desc)
 {
-    g_vlmJsonCollector.AddSegment(RoundTimeSec(start_sec), RoundTimeSec(end_sec), desc);
+    // Only emit a segment when time actually advances to a new rounded window boundary.
+    const double start_rounded = RoundTimeSec(start_sec);
+    const double end_rounded = RoundTimeSec(end_sec);
+    if (end_rounded <= start_rounded)
+        return;
+
+    g_vlmJsonCollector.AddSegment(start_rounded, end_rounded, desc);
 }
 
 void RecordJsonSegmentFromBatch(const BatchState &bs, const std::string &desc)

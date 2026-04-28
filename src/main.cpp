@@ -179,6 +179,8 @@ int main(int argc, char *argv[])
 
         // Reset state for each video
         g_batchState.reset();
+        // Important: segment continuity should not cross video boundaries.
+        g_batchState.next_seg_start_sec = 0.0;
         g_batchState.batchIndex = 0;
         g_cbInferenceQueue.clear();
         g_cb_pending_batches = 0;
